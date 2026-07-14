@@ -5,6 +5,7 @@
 .gitignore
 .snakemake
 .superpowers
+.test
 data
 results
 logs

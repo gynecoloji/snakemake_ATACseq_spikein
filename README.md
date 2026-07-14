@@ -55,9 +55,14 @@ Both stages live in a single standard-layout `workflow/Snakefile`: one `snakemak
 
 ## Workflow Diagram
 
-The complete workflow is shown below:
+The rule graph ("tube map") is rendered automatically on the
+[Snakemake Workflow Catalog page](https://snakemake.github.io/snakemake-workflow-catalog/?usage=gynecoloji/snakemake_ATACseq_spikein)
+via [snakevision](https://github.com/snakemake/snakevision), from the executable
+test case in [`.test/`](.test). To generate it yourself:
 
-![ATAC-seq Workflow Diagram](ATACseq_workflow.svg)
+```bash
+snakemake -s workflow/Snakefile -c 1 -d .test --forceall --rulegraph | dot -Tsvg > rulegraph.svg
+```
 
 ## Features
 

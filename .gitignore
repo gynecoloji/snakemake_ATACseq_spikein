@@ -65,3 +65,12 @@ ehthumbs.db
 # docker images
 *.sif
 
+# ── Snakemake Workflow Catalog test fixture (.test/) ──
+# .test/ ships tiny EMPTY placeholder reference/read files so the catalog can
+# build the rulegraph for the tube map (snakemake -d .test --forceall --rulegraph);
+# the command never reads them, so 0-byte files suffice. Force-track the ones
+# whose extensions are ignored above.
+!.test/ref/*.fa
+!.test/ref/*.gtf
+!.test/ref/*.2bit
+
