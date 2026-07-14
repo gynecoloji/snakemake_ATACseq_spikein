@@ -57,13 +57,18 @@ Both stages live in a single standard-layout `workflow/Snakefile`: one `snakemak
 
 ## Workflow Diagram
 
-The rule graph ("tube map") is rendered automatically on the
+The workflow rule graph, rendered as a "tube map" with
+[snakevision](https://github.com/OpenOmics/snakevision):
+
+![ATAC-seq workflow tube map](images/rulegraph.svg)
+
+The same tube map is rendered automatically on the
 [Snakemake Workflow Catalog page](https://snakemake.github.io/snakemake-workflow-catalog/?usage=gynecoloji/snakemake_ATACseq_spikein)
-via [snakevision](https://github.com/snakemake/snakevision), from the executable
-test case in [`.test/`](.test). To generate it yourself:
+from the executable test case in [`.test/`](.test). Regenerate it with:
 
 ```bash
-snakemake -s workflow/Snakefile -c 1 -d .test --forceall --rulegraph | dot -Tsvg > rulegraph.svg
+snakemake -s workflow/Snakefile -c 1 -d .test --forceall --rulegraph > rulegraph.dot
+snakevision -s all atacseq_all qc_all -o images/rulegraph.svg rulegraph.dot
 ```
 
 ## Features
