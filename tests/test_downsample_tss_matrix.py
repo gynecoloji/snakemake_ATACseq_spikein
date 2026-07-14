@@ -1,6 +1,6 @@
 import importlib.util, pathlib, gzip, json, base64
 import numpy as np
-_p = pathlib.Path(__file__).resolve().parents[1] / "ref" / "downsample_tss_matrix.py"
+_p = pathlib.Path(__file__).resolve().parents[1] / "workflow" / "scripts" / "downsample_tss_matrix.py"
 _spec = importlib.util.spec_from_file_location("dts", _p)
 dts = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(dts)
 

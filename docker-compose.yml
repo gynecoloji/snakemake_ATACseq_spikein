@@ -1,9 +1,10 @@
 # Run the ATAC-seq Snakemake workflow in a container.
 #
-#   docker compose build                                           # build the image (pre-bakes conda envs)
-#   docker compose run --rm atacseq -s snakefile_ATACseq --cores 8 # main pipeline
-#   docker compose run --rm atacseq -s snakefile_ATAC_QC --cores 8 # QC pipeline (run AFTER the main one)
-#   docker compose run --rm atacseq -s snakefile_ATACseq -n        # dry run
+#   docker compose build                                              # build the image (pre-bakes conda envs)
+#   docker compose run --rm atacseq --cores 8                         # everything (primary → QC)
+#   docker compose run --rm atacseq --cores 8 atacseq_all             # primary pipeline only
+#   docker compose run --rm atacseq --cores 8 qc_all                  # QC only (after primary)
+#   docker compose run --rm atacseq -n                                # dry run
 #
 # The whole project directory is mounted at /workflow, so the container reads your
 # code + ref/ genomes + data/ FASTQs and writes results/ back to the host. The
@@ -24,5 +25,7 @@ services:
     user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
     environment:
       HOME: /tmp
-    # Default command; override on the CLI (see examples above).
-    command: ["-s", "snakefile_ATACseq", "--cores", "8"]
+    # Default command; override on the CLI (see examples above). The image's
+    # ENTRYPOINT already sets `-s workflow/Snakefile --use-conda ...`, so this
+    # only needs the cores (and an optional target).
+    command: ["--cores", "8"]

@@ -1,5 +1,5 @@
 library(testthat)
-source("../ref/diffbind_helpers.R")
+source("../workflow/scripts/diffbind_helpers.R")
 
 test_that("spikein_size_factors inverts NF and centers to geomean 1", {
   nf <- c(a = 0.25, b = 0.5, c = 1.0)

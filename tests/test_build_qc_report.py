@@ -1,5 +1,5 @@
 import importlib.util, pathlib
-_p = pathlib.Path(__file__).resolve().parents[1] / "ref" / "build_qc_report.py"
+_p = pathlib.Path(__file__).resolve().parents[1] / "workflow" / "scripts" / "build_qc_report.py"
 _spec = importlib.util.spec_from_file_location("build_qc_report", _p)
 bqr = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(bqr)

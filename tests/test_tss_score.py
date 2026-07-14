@@ -1,6 +1,6 @@
 import importlib.util, pathlib
 
-_p = pathlib.Path(__file__).resolve().parents[1] / "ref" / "tss_score.py"
+_p = pathlib.Path(__file__).resolve().parents[1] / "workflow" / "scripts" / "tss_score.py"
 _spec = importlib.util.spec_from_file_location("tss_score", _p)
 ts = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ts)

@@ -47,8 +47,10 @@ A comprehensive Snakemake workflow for processing and analyzing ATAC-seq data fr
 
 This pipeline integrates three complementary components for complete ATAC-seq analysis:
 
-1. **Primary ATAC-seq workflow** (`snakefile_ATACseq`) - Raw FASTQ → concatenated (human + spike-in) Bowtie2 alignment → filtering → MACS2 peak calling → **spike-in normalization** (scaled bigWigs) → a reproducible, fixed-width **consensus peak set** with a fragment-count matrix
-2. **ATAC-seq QC workflow** (`snakefile_ATAC_QC`) - deepTools QC, FRiP, IDR, library complexity, spike-in QC, TSS enrichment score, a self-contained **interactive HTML QC report** (all QC except FastQC), plus a FastQC-only MultiQC
+1. **Primary ATAC-seq stage** (`atacseq_all` target) - Raw FASTQ → concatenated (human + spike-in) Bowtie2 alignment → filtering → MACS2 peak calling → **spike-in normalization** (scaled bigWigs) → a reproducible, fixed-width **consensus peak set** with a fragment-count matrix
+2. **ATAC-seq QC stage** (`qc_all` target) - deepTools QC, FRiP, IDR, library complexity, spike-in QC, TSS enrichment score, a self-contained **interactive HTML QC report** (all QC except FastQC), plus a FastQC-only MultiQC
+
+Both stages live in a single standard-layout `workflow/Snakefile`: one `snakemake --use-conda` run builds the primary stage **and** the QC report in dependency order (unified DAG). Run a subset with the `atacseq_all` or `qc_all` targets. The layout follows the [Snakemake Workflow Catalog](https://snakemake.github.io/snakemake-workflow-catalog/) conventions, so the workflow can be deployed into another project with `snakedeploy deploy-workflow` (see [Deploying with snakedeploy](#deploying-with-snakedeploy)).
 3. **Differential Analysis Notebook** (`ATACseq_Dx.ipynb`, R / Bioconductor) - **DESeq2** differential binding (NICD3 vs Ctrl) on the consensus count matrix — split into **promoter vs distal** peaks with a **paired** design and run under **both spike-in and default (median-of-ratios) normalization** for comparison — plus **Gviz genome-browser tracks** at Notch target loci as a positive control; runs on the `atacseq-diffbind` container
 
 ## Workflow Diagram
@@ -72,7 +74,7 @@ The complete workflow is shown below:
 
 ## Pipeline Components
 
-### 1. Primary Processing Pipeline (`snakefile_ATACseq`)
+### 1. Primary Processing Pipeline (`atacseq_all` target)
 
 **Processing Steps:**
 ```
@@ -95,7 +97,7 @@ Raw FASTQ → FastQC → fastp
 - **Spike-in normalization**: `NF = min(spike-in reads) / spike-in reads`, applied as a bigWig scale factor
 - **Consensus peaks** (fixed-width, SPM-ranked; majority-vote/IDR reproducibility) + **featureCounts** matrix
 
-### 2. Quality Control Pipeline (`snakefile_ATAC_QC`)
+### 2. Quality Control Pipeline (`qc_all` target)
 
 **Comprehensive QC Metrics** (run after the primary pipeline; consumes its `results/`):
 - **Fragment Size Analysis** - Insert size distribution and nucleosomal patterns
@@ -132,8 +134,8 @@ performs the differential test end-to-end:
   **both** the spike-in-scaled and RPGC bigWigs (**two figures per gene**), with all-transcript
   gene models from the GTF → `results/browser_tracks/` (PNG + PDF)
 
-The executed notebook is generated from `ref/build_diffbind_notebook.py` (helpers in
-`ref/diffbind_helpers.R`).
+The executed notebook is generated from `workflow/scripts/build_diffbind_notebook.py`
+(helpers in `workflow/scripts/diffbind_helpers.R`).
 
 ## Requirements
 
@@ -250,9 +252,9 @@ samtools faidx ref/hg38.fa
 
 # The promoter TSS BEDs (unique / MANE / CAGE) already ship with the repo. Rebuild
 # them only after updating the GTF, or to also produce the per-transcript set:
-python ref/build_promoter_beds.py all          # modes: unique | mane | cage | transcript | all
+python workflow/scripts/build_promoter_beds.py all   # modes: unique | mane | cage | transcript | all
 # (needs ref/hg38.fa.fai + the GTF; the `cage` mode also needs the FANTOM5 download above)
-# Kept chromosomes default to `keep_chroms` in ref/config.yaml (currently chr1-22,X);
+# Kept chromosomes default to `keep_chroms` in config/config.yaml (currently chr1-22,X);
 # override per run with e.g. --chroms chr1,chr2,chrX  or  --chroms all  (the filename
 # scope token, e.g. chr1-22X, auto-adjusts; set it explicitly with --label).
 
@@ -299,8 +301,8 @@ git clone https://github.com/gynecoloji/snakemake_ATACseq_spikein.git
 cd snakemake_ATACseq_spikein
 
 # You need Snakemake + conda/mamba as the driver. The per-rule tool environments
-# (envs/*.yaml) are created automatically on the first `--use-conda` run — you do
-# not build them by hand.
+# (workflow/envs/*.yaml) are created automatically on the first `--use-conda` run —
+# you do not build them by hand.
 mamba create -n atacseq -c conda-forge -c bioconda snakemake-minimal pandas
 conda activate atacseq
 ```
@@ -310,11 +312,11 @@ conda activate atacseq
 
 ## Configuration
 
-Edit `ref/config.yaml` to match your experimental setup and reference files:
+Edit `config/config.yaml` to match your experimental setup and reference files:
 
 ```yaml
 # ── Samples ──
-samples_table: "ref/samples.csv"          # columns: sample_id, type, group
+samples_table: "config/samples.csv"       # columns: sample_id, type, group
 
 # ── Adapter trimming (fastp) ──
 # Omit or leave empty  ->  fastp AUTO-DETECTS adapters for PE reads (--detect_adapter_for_pe).
@@ -351,8 +353,9 @@ enhancer_bed: "ref/enhancer_chr1-22X.bed"
 spikein_pct_min: 2                        # Active Motif spike-in target range (%)
 spikein_pct_max: 10
 ```
-See `ref/config.yaml` for the complete, commented file. To switch spike-in species,
-change `spikein_fasta` (the combined index is rebuilt automatically).
+See `config/config.yaml` for the complete, commented file, and `config/README.md`
+for a full parameter reference. To switch spike-in species, change `spikein_fasta`
+(the combined index is rebuilt automatically).
 
 ## Data Preparation
 
@@ -368,7 +371,7 @@ data/{sample}_R2_001.fastq.gz
 
 ### Sample Information
 
-Create `ref/samples.csv`:
+Create `config/samples.csv`:
 ```csv
 sample_id,type,group
 GSF4007-Control_1_S11,Control,group1
@@ -385,25 +388,33 @@ reproducibility** (≥2-of-N majority vote for ≥3-replicate conditions, or IDR
 
 ## Running the Pipeline
 
+The workflow is the standard-layout `workflow/Snakefile`. A single run builds the
+primary stage **and** the QC report in dependency order (unified DAG); use the
+`atacseq_all` / `qc_all` targets to run just one stage. Snakemake auto-discovers
+`workflow/Snakefile` when run from the repo root, so `-s workflow/Snakefile` is
+optional but shown here for clarity.
+
 ### Dry Run
 
 To check the workflow without executing any commands:
 ```bash
-# Check primary processing pipeline
-snakemake -s snakefile_ATACseq -n
+# Check the whole workflow (primary → QC)
+snakemake -s workflow/Snakefile -n
 
-# Check QC pipeline
-snakemake -s snakefile_ATAC_QC -n
+# Or check a single stage
+snakemake -s workflow/Snakefile -n atacseq_all
+snakemake -s workflow/Snakefile -n qc_all
 ```
 
 ### Local Execution
 
 ```bash
-# Run primary processing pipeline
-snakemake -s snakefile_ATACseq --use-conda --cores 20
+# Run everything (primary stage → QC report) in one dependency-ordered DAG
+snakemake -s workflow/Snakefile --use-conda --cores 20
 
-# Run QC pipeline (after primary processing completes)
-snakemake -s snakefile_ATAC_QC --use-conda --cores 20
+# Or run a single stage
+snakemake -s workflow/Snakefile --use-conda --cores 20 atacseq_all   # primary only
+snakemake -s workflow/Snakefile --use-conda --cores 20 qc_all        # QC only (after primary)
 ```
 
 ### Differential Analysis
@@ -430,7 +441,7 @@ apptainer exec atacseq-diffbind.sif \
 
 For execution on a SLURM cluster: (Not tested)
 ```bash
-snakemake -s snakefile_ATACseq --use-conda \
+snakemake -s workflow/Snakefile --use-conda \
   --cluster "sbatch -p {params.partition} -c {threads} -t {params.time}" \
   --jobs 100
 ```
@@ -460,13 +471,13 @@ apptainer pull atacseq-diffbind.sif docker://gynecoloji/atacseq-diffbind:latest
 
 Genomes/FASTQs are **not** baked into the images; you mount your project directory at run
 time (see [`DOCKER.md`](DOCKER.md) for the exact `ref/` and `data/` files the container
-expects). Run the primary pipeline first, then QC; the differential notebook runs in the
-diffbind image (see [Differential Analysis](#differential-analysis)).
+expects). A single run builds the primary stage then QC (unified DAG); the differential
+notebook runs in the diffbind image (see [Differential Analysis](#differential-analysis)).
 
 The image's entrypoint is
 `snakemake --use-conda --conda-frontend mamba --conda-prefix /opt/wf-conda`, so anything
-you pass after the image name goes straight to `snakemake` (e.g. `-s <snakefile> --cores N`,
-or `-n` for a dry run).
+you pass after the image name goes straight to `snakemake` (e.g. `-s workflow/Snakefile
+--cores N`, an optional `atacseq_all`/`qc_all` target, or `-n` for a dry run).
 
 #### Docker
 
@@ -474,14 +485,14 @@ or `-n` for a dry run).
 # Pull the published image (or run `docker compose build` to build it locally)
 docker pull gynecoloji/atacseq-spikein:latest
 
-# Run from your project directory (which holds snakefile_*, ref/, data/):
-# 1) primary processing pipeline
+# Run from your project directory (which holds workflow/, config/, ref/, data/):
+# Everything (primary stage → QC report) in one dependency-ordered run:
 docker run --rm -v "$(pwd)":/workflow -e HOME=/tmp --user "$(id -u):$(id -g)" \
-    gynecoloji/atacseq-spikein:latest -s snakefile_ATACseq --cores 16
+    gynecoloji/atacseq-spikein:latest -s workflow/Snakefile --cores 16
 
-# 2) QC pipeline (after the primary run finishes)
+# Or just one stage: append the atacseq_all or qc_all target
 docker run --rm -v "$(pwd)":/workflow -e HOME=/tmp --user "$(id -u):$(id -g)" \
-    gynecoloji/atacseq-spikein:latest -s snakefile_ATAC_QC --cores 16
+    gynecoloji/atacseq-spikein:latest -s workflow/Snakefile --cores 16 qc_all
 
 # dry run: append  -n
 ```
@@ -489,8 +500,8 @@ docker run --rm -v "$(pwd)":/workflow -e HOME=/tmp --user "$(id -u):$(id -g)" \
 Convenience wrappers `docker compose` and `./run_pipeline.sh` are also provided:
 
 ```bash
-./run_pipeline.sh snakefile_ATACseq --cores 16
-docker compose run --rm atacseq -s snakefile_ATAC_QC --cores 16
+./run_pipeline.sh --cores 16                 # everything (primary → QC)
+docker compose run --rm atacseq --cores 16 qc_all
 ```
 
 #### Apptainer / Singularity (HPC)
@@ -503,27 +514,56 @@ Apptainer auto-mounts `$HOME`, `/tmp`, and the current directory, and runs as yo
 # One-time: build a local .sif from the Docker Hub image
 apptainer pull atacseq-spikein.sif docker://gynecoloji/atacseq-spikein:latest
 
-# Run from your project directory:
-# 1) primary processing pipeline
+# Run from your project directory (everything: primary stage → QC report):
 apptainer exec atacseq-spikein.sif \
     snakemake --use-conda --conda-frontend mamba --conda-prefix /opt/wf-conda \
-    -s snakefile_ATACseq --cores 16
+    -s workflow/Snakefile --cores 16
 
-# 2) QC pipeline (after the primary run)
+# Or just one stage: append the atacseq_all or qc_all target
 apptainer exec atacseq-spikein.sif \
     snakemake --use-conda --conda-frontend mamba --conda-prefix /opt/wf-conda \
-    -s snakefile_ATAC_QC --cores 16
+    -s workflow/Snakefile --cores 16 qc_all
 ```
 
 Notes:
 - **References/data outside the project dir:** if `ref/` genomes live elsewhere (e.g. on
   scratch), bind them in — `--bind /scratch/genomes:/scratch/genomes` — and point
-  `ref/config.yaml` at the bound paths.
+  `config/config.yaml` at the bound paths.
 - **Pre-built envs:** the five conda environments are baked at `/opt/wf-conda`
   (read-only in the SIF) and reused via `--conda-prefix`. If Apptainer reports a
   read-only error writing there, add `--writable-tmpfs` to the `apptainer exec` command.
-- `apptainer run atacseq-spikein.sif -s snakefile_ATACseq --cores 16` also works — it
+- `apptainer run atacseq-spikein.sif -s workflow/Snakefile --cores 16` also works — it
   invokes the same entrypoint.
+
+## Deploying with snakedeploy
+
+This repository follows the [Snakemake Workflow Catalog](https://snakemake.github.io/snakemake-workflow-catalog/)
+standardized structure (`workflow/Snakefile`, `config/`, `workflow/rules|scripts|envs/`,
+and `.snakemake-workflow-catalog.yml`), so it can be deployed into another project
+without cloning it by hand:
+
+```bash
+pip install snakedeploy
+# In an empty target project directory:
+snakedeploy deploy-workflow https://github.com/gynecoloji/snakemake_ATACseq_spikein . --tag main
+```
+
+This writes `workflow/Snakefile` (which `module`-imports this workflow) and a
+`config/` copy for you to edit. You can also import selected rules into your own
+`Snakefile` with Snakemake's module system:
+
+```python
+module atacseq:
+    snakefile:
+        github("gynecoloji/snakemake_ATACseq_spikein", path="workflow/Snakefile", tag="main")
+    config:
+        config
+
+use rule * from atacseq
+```
+
+Then supply your own `config/config.yaml`, `config/samples.csv`, and `ref/` reference
+data (see [Configuration](#configuration)) and run with `snakemake --use-conda`.
 
 ## Pipeline Details
 
@@ -533,7 +573,7 @@ Notes:
 - **Fastp** - Adapter trimming and quality filtering with the following parameters:
   - Minimum read length: 30bp
   - Adapter handling: **auto-detects** adapters for paired-end reads by default
-    (`--detect_adapter_for_pe`); set `adapter_r1`/`adapter_r2` in `ref/config.yaml`
+    (`--detect_adapter_for_pe`); set `adapter_r1`/`adapter_r2` in `config/config.yaml`
     to override with explicit sequences
   - Polyg tail trimming
   - Quality trimming: sliding window of 4 with mean quality 20
@@ -578,7 +618,7 @@ Notes:
 - **Fragment counting** (`count_fragments_consensus`) - `featureCounts` (paired-end) over the
   consensus set → `results/consensus/consensus_counts.txt` (a regions × samples matrix).
 
-### 6. Comprehensive QC Metrics (`snakefile_ATAC_QC`)
+### 6. Comprehensive QC Metrics (`qc_all` target)
 
 - **Fragment Size Analysis** - Nucleosomal pattern assessment using `bamPEFragmentSize`
 - **TSS Enrichment** - Heatmap/profile plus a **numeric enrichment score** per sample
@@ -646,12 +686,21 @@ results/
 
 ### Directory Structure
 ```
-ATAC-seq-Pipeline/
-├── data/                   # Raw FASTQ files
-├── ref/                    # Reference files, config, helper scripts
+ATAC-seq-Pipeline/                     # Snakemake Workflow Catalog layout
+├── config/
+│   ├── config.yaml         # Workflow parameters
+│   ├── samples.csv         # Sample sheet (sample_id, type, group)
+│   └── README.md           # Configuration reference
+├── workflow/
+│   ├── Snakefile           # Entry point (unified DAG; targets: atacseq_all, qc_all)
+│   ├── rules/              # common.smk, atacseq.smk, qc.smk
+│   ├── scripts/            # Python / R scripts used by the rules (+ helpers)
+│   └── envs/               # Per-rule conda environment files
+├── .snakemake-workflow-catalog.yml    # Catalog metadata (enables snakedeploy)
+├── data/                   # Raw FASTQ files (you provide)
+├── ref/                    # Reference genomes/annotations/BEDs (you download)
 │   └── COMBINED/           # Combined human+spike-in Bowtie2 index (built by the pipeline)
-├── envs/                   # Per-rule conda environment files
-├── snakefile_ATACseq, snakefile_ATAC_QC, create_envs.smk
+├── create_envs.smk         # Build-time helper (pre-bakes the conda envs into the image)
 ├── Dockerfile, docker-compose.yml, run_pipeline.sh, DOCKER.md
 ├── results/                # All pipeline outputs (detailed above)
 │   └── tmp/                # Temporary processing files
@@ -708,13 +757,13 @@ ATAC-seq-Pipeline/
 Comprehensive log files for each step are stored in the `logs/` directory:
 ```
 logs/
-# Primary pipeline (snakefile_ATACseq)
+# Primary pipeline (atacseq_all target)
 ├── fastqc/, fastp/, bowtie2/, samtools/, dedup/, blacklist_filter/, macs2/
 ├── build_combined_genome/, spikein_extract_count/, spikein_factors/
 ├── bigwig/, spikein_bigwig/
 ├── relaxed_peaks/, reproducible/, consensus/, consensus_counts/
 ├── blacklist_stats/
-# QC pipeline (snakefile_ATAC_QC)
+# QC pipeline (qc_all target)
 ├── deeptools_bedgraph/, deeptools_fragmentsize/, deeptools_plotfingerprint/
 ├── deeptools_correlation/, deeptools_gc_bias/, deeptools_tss/, tss_enrichment_score/
 ├── FRiP/, qc_relaxed_peaks/, idr/, library_complexity/

@@ -6,10 +6,10 @@
 #       --conda-frontend mamba --conda-prefix /opt/wf-conda --cores 1
 #
 # It has no external inputs, so the DAG resolves without any genomes/FASTQs.
-# Snakemake keys each conda env by the CONTENT of its envs/*.yaml file, so the
-# envs built here are reused by snakefile_ATACseq / snakefile_ATAC_QC at runtime
-# (same env files, same --conda-prefix). If content differs, Snakemake just
-# rebuilds that one env at runtime — no hard failure.
+# Snakemake keys each conda env by the CONTENT of its workflow/envs/*.yaml file,
+# so the envs built here are reused by workflow/Snakefile at runtime (same env
+# files, same --conda-prefix). If content differs, Snakemake just rebuilds that
+# one env at runtime — no hard failure.
 
 ENVS = ["snakemake", "deeptools", "macs2", "idr", "bedtools"]
 
@@ -21,6 +21,6 @@ rule create_env:
     output:
         "build/conda_env_{env}.ready"
     conda:
-        "envs/{env}.yaml"
+        "workflow/envs/{env}.yaml"
     shell:
         "touch {output}"

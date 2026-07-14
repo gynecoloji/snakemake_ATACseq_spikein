@@ -45,19 +45,18 @@ WORKDIR /workflow
 # Env specs first, then pre-build the 5 per-rule conda envs INTO the image. Doing
 # this BEFORE copying the workflow code means later edits to the Snakefiles/scripts
 # don't invalidate the (slow) conda-env layer.
-COPY envs/ ./envs/
+COPY workflow/envs/ ./workflow/envs/
 COPY create_envs.smk ./
 RUN snakemake -s create_envs.smk --use-conda --conda-create-envs-only \
         --conda-frontend mamba --conda-prefix "${WF_CONDA_PREFIX}" --cores 1 && \
     mamba clean -afy && \
     rm -rf build .snakemake
 
-# Workflow code (genomes/data are mounted at runtime, not baked)
-COPY snakefile_ATACseq snakefile_ATAC_QC ./
-COPY ref/config.yaml ref/samples.csv ./ref/
-COPY ref/*.py ./ref/
+# Workflow code + config (genomes/data are mounted at runtime, not baked)
+COPY workflow/ ./workflow/
+COPY config/ ./config/
 COPY tests/ ./tests/
 
-# ENTRYPOINT fixes the conda settings; pass the snakefile/target/cores at `docker run`.
+# ENTRYPOINT fixes the conda settings; pass the target/cores at `docker run`.
 ENTRYPOINT ["snakemake", "--use-conda", "--conda-frontend", "mamba", "--conda-prefix", "/opt/wf-conda"]
-CMD ["-s", "snakefile_ATACseq", "--cores", "4"]
+CMD ["-s", "workflow/Snakefile", "--cores", "4"]

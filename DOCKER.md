@@ -1,6 +1,6 @@
 # Running the ATAC-seq workflow with Docker
 
-The pipeline uses **one conda environment per rule** (`envs/*.yaml`) because its
+The pipeline uses **one conda environment per rule** (`workflow/envs/*.yaml`) because its
 tools require incompatible Python versions (`idr`=3.6, `macs2`=3.7,
 `snakemake`/`deeptools`=3.12). The image therefore ships **Snakemake + the 5
 pre-built conda envs** and runs Snakemake with `--use-conda`.
@@ -21,7 +21,7 @@ The container reads these from the mounted project directory:
 | `ref/picard.jar` | Picard (used by dedup) |
 | `ref/gencode.v36.annotation.gtf`, `ref/hg38.2bit` | QC (TSS, GC bias) |
 | `ref/promoter_chr1-22X.bed`, `ref/enhancer_chr1-22X.bed` | QC (reads-in-annotation) |
-| `ref/config.yaml`, `ref/samples.csv` | config + sample sheet |
+| `config/config.yaml`, `config/samples.csv` | config + sample sheet (tracked in the repo) |
 
 The combined Bowtie2 index is built by the pipeline itself (`build_combined_genome`).
 
@@ -38,35 +38,41 @@ time). For a reproducible image, pin the base tag in the `Dockerfile`
 
 ## 3. Run
 
+A single run builds the primary pipeline **and** the QC report (unified DAG).
 Using the helper script (recommended):
 
 ```bash
-./run_pipeline.sh snakefile_ATACseq -n            # dry run: check the DAG first
-./run_pipeline.sh snakefile_ATACseq --cores 16    # main pipeline
-./run_pipeline.sh snakefile_ATAC_QC  --cores 16   # QC pipeline (AFTER the main one)
+./run_pipeline.sh -n                        # dry run: check the DAG first
+./run_pipeline.sh --cores 16                # everything (primary → QC)
+./run_pipeline.sh --cores 16 atacseq_all    # primary pipeline only
+./run_pipeline.sh --cores 16 qc_all         # QC only (after primary)
 ```
 
-Or with docker compose:
+Or with docker compose (the image entrypoint sets `-s workflow/Snakefile`; run
+from the project root so Snakemake finds `workflow/Snakefile`):
 
 ```bash
-docker compose run --rm atacseq -s snakefile_ATACseq -n
-docker compose run --rm atacseq -s snakefile_ATACseq --cores 16
-docker compose run --rm atacseq -s snakefile_ATAC_QC  --cores 16
+docker compose run --rm atacseq -n
+docker compose run --rm atacseq --cores 16
+docker compose run --rm atacseq --cores 16 atacseq_all
+docker compose run --rm atacseq --cores 16 qc_all
 ```
 
 Or a raw `docker run` (mount the project; reuse the baked envs):
 
 ```bash
 docker run --rm -v "$(pwd)":/workflow -e HOME=/tmp --user "$(id -u):$(id -g)" \
-    atacseq-spikein:latest -s snakefile_ATACseq --cores 16
+    atacseq-spikein:latest -s workflow/Snakefile --cores 16
 ```
 
 Everything after the image name is passed straight to `snakemake` (the image's
 entrypoint already sets `--use-conda --conda-frontend mamba --conda-prefix
 /opt/wf-conda`).
 
-**Order matters:** run `snakefile_ATACseq` first (alignment → peaks → bigWigs →
-consensus), then `snakefile_ATAC_QC` (it consumes the main pipeline's `results/`).
+**Targets:** the default target runs primary → QC in dependency order. Use the
+`atacseq_all` target for just the primary pipeline (alignment → peaks → bigWigs →
+consensus) and `qc_all` for just the QC stage (it consumes the primary pipeline's
+`results/`).
 
 ## 4. Notes & troubleshooting
 
@@ -78,8 +84,8 @@ consensus), then `snakefile_ATAC_QC` (it consumes the main pipeline's `results/`
 - **`defaults` channel ToS:** the env YAMLs list the Anaconda `defaults` channel.
   The Dockerfile best-effort-accepts its ToS; if an env solve still fails on
   `defaults`, either accept it (`conda tos accept …`) or drop `- defaults` from
-  the affected `envs/*.yaml`.
-- **`bc` for FRiP/complexity:** those QC rules use `envs/bedtools.yaml`, which
+  the affected `workflow/envs/*.yaml`.
+- **`bc` for FRiP/complexity:** those QC rules use `workflow/envs/bedtools.yaml`, which
   must contain `bc` (and `samtools`, `bedtools`).
 - **Cores:** pass `--cores N` to match the host; add `--resources mem_mb=…` if you
   cap memory. The combined `bowtie2-build` and alignments are the heavy steps.

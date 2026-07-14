@@ -1,7 +1,7 @@
 import importlib.util, pathlib
 import pytest
 
-_p = pathlib.Path(__file__).resolve().parents[1] / "ref" / "compute_spikein_factors.py"
+_p = pathlib.Path(__file__).resolve().parents[1] / "workflow" / "scripts" / "compute_spikein_factors.py"
 _spec = importlib.util.spec_from_file_location("compute_spikein_factors", _p)
 csf = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(csf)

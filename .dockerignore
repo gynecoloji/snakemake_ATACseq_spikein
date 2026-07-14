@@ -16,13 +16,7 @@ tests/.pytest_cache
 *.svg
 *.mermaid
 
-# ref/: exclude the big genomes/indexes/annotations; keep only what the image needs
-ref/*
-!ref/config.yaml
-!ref/samples.csv
-!ref/*.py
-
-# host-built conda dirs (image builds its own)
-ref/COMBINED
-ref/SPIKEIN
-ref/ENSEMBL
+# ref/: reference DATA (genomes, indexes, annotations, BEDs) is provided at
+# runtime via the bind mount, never baked into the image. The workflow code
+# (workflow/) and config (config/) are copied by the Dockerfile.
+ref/

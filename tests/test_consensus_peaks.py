@@ -1,6 +1,6 @@
 import importlib.util, pathlib
 
-_p = pathlib.Path(__file__).resolve().parents[1] / "ref" / "consensus_peaks.py"
+_p = pathlib.Path(__file__).resolve().parents[1] / "workflow" / "scripts" / "consensus_peaks.py"
 _spec = importlib.util.spec_from_file_location("consensus_peaks", _p)
 cp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(cp)
