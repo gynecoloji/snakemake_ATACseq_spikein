@@ -22,11 +22,10 @@ keywords:
   - consensus peaks
   - epigenomics
   - bioinformatics workflow
-# Match `version` + `date-released` to the release you archive on Zenodo.
-# Because v1.0.0 is already tagged (and predates the .test/schema work), archive a
-# fresh release cut at the current main; v1.1.0 is recommended (see README notes).
-version: v1.1.0
-date-released: "2026-07-14"
+# `version` + `date-released` are bumped automatically by release-please on each
+# release (via the annotations below) — do not edit them by hand.
+version: "1.1.0" # x-release-please-version
+date-released: "2026-07-14" # x-release-please-date
 # After the first Zenodo release, add the concept ("all versions") DOI:
 # identifiers:
 #   - type: doi

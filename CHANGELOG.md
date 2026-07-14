@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-14
+
+Adds the Snakemake Workflow Catalog's auto-rendering features (tube map +
+parameter table), config validation, and citation metadata.
+
+### Added
+
+- `.test/` executable test case (tiny placeholder inputs) so the catalog renders
+  the workflow **tube map** — the rule graph, via snakevision — from
+  `snakemake -s workflow/Snakefile -c 1 -d .test --forceall --rulegraph`.
+- `workflow/schemas/config.schema.yaml` — a JSON schema documenting every config
+  parameter (type, default, description). The catalog renders it as a
+  **parameter table**, and the workflow now runs `validate(config, ...)` on every
+  invocation (fail-fast on bad/missing parameters; fills in defaults).
+- `CITATION.cff` and a Zenodo DOI badge / citation section in the README.
+
+### Changed
+
+- Documentation now points at `config.schema.yaml` as the single source of truth
+  for parameters; removed the duplicated parameter tables from `README.md` and
+  `config/README.md`.
+- Replaced the static workflow-diagram files (`atacseq_pipeline_flowchart.mermaid`,
+  `ATACseq_workflow.svg`, `ATACseq_workflow_interactive.html`) with the
+  catalog's auto-rendered tube map.
+
+### Removed
+
+- The three static workflow-diagram artifacts listed above (recoverable from git
+  history).
+
 ## [1.0.0] - 2026-07-13
 
 First release published to the [Snakemake Workflow Catalog](https://snakemake.github.io/snakemake-workflow-catalog/).
@@ -73,5 +103,6 @@ introduces.
 - Configuration moved from `ref/` to `config/`; point your edits at
   `config/config.yaml` and `config/samples.csv`.
 
-[Unreleased]: https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gynecoloji/snakemake_ATACseq_spikein/releases/tag/v1.0.0
