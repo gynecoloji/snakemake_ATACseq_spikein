@@ -1,6 +1,4 @@
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
-<!-- Replace zenodo.XXXXXXX (badge image + link) with your Zenodo concept
-     ("Cite all versions") DOI after the first archived release; update CITATION.cff too. -->
+[![DOI](https://zenodo.org/badge/1299925986.svg)](https://doi.org/10.5281/zenodo.21350287)
 
 ## Citation
 
