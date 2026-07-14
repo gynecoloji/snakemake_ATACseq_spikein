@@ -1,3 +1,4 @@
+[![CI](https://github.com/gynecoloji/snakemake_ATACseq_spikein/actions/workflows/ci.yml/badge.svg)](https://github.com/gynecoloji/snakemake_ATACseq_spikein/actions/workflows/ci.yml)
 [![DOI](https://zenodo.org/badge/1299925986.svg)](https://doi.org/10.5281/zenodo.21350287)
 
 ## Citation
