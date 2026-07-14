@@ -1,0 +1,28 @@
+# Run the ATAC-seq Snakemake workflow in a container.
+#
+#   docker compose build                                           # build the image (pre-bakes conda envs)
+#   docker compose run --rm atacseq -s snakefile_ATACseq --cores 8 # main pipeline
+#   docker compose run --rm atacseq -s snakefile_ATAC_QC --cores 8 # QC pipeline (run AFTER the main one)
+#   docker compose run --rm atacseq -s snakefile_ATACseq -n        # dry run
+#
+# The whole project directory is mounted at /workflow, so the container reads your
+# code + ref/ genomes + data/ FASTQs and writes results/ back to the host. The
+# pre-built conda envs live at /opt/wf-conda inside the image (not under /workflow),
+# so the mount does not hide them.
+
+services:
+  atacseq:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: atacseq-spikein:latest
+    working_dir: /workflow
+    volumes:
+      - ./:/workflow
+    # Write outputs as the host user (avoids root-owned results/). Export
+    # DOCKER_UID/DOCKER_GID or edit these defaults as needed.
+    user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
+    environment:
+      HOME: /tmp
+    # Default command; override on the CLI (see examples above).
+    command: ["-s", "snakefile_ATACseq", "--cores", "8"]

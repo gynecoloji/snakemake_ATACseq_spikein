@@ -1,0 +1,179 @@
+flowchart TD
+    %% ── Input Data ──
+    subgraph INPUT["📁 INPUT DATA"]
+        A[Raw FASTQ<br/>R1 & R2]
+        SC[Sample Table CSV<br/>sample_id, type, group]
+        HF[Human Genome FASTA<br/>hg38.fa]
+        SF[Spike-in Genome FASTA<br/>dm6.fa]
+        BL[Blacklist BED]
+        GTF[GTF Annotation]
+        TB[2bit Genome]
+        PE[Promoter / Enhancer BED]
+        CFG[Config YAML<br/>Parameters & Paths]
+    end
+
+    %% ── Pre-processing ──
+    subgraph PREPROC["🔧 PRE-PROCESSING"]
+        B[FastQC<br/>Quality Control]
+        C[Fastp<br/>Trimming & Filtering]
+        E[Trimmed FASTQ]
+    end
+
+    %% ── Combined genome ──
+    subgraph GENOME["🧬 COMBINED GENOME"]
+        BCG[build_combined_genome<br/>subset human to align_chroms +<br/>prefix spike-in + concatenate]
+        IDX[Combined Bowtie2 Index<br/>ref/COMBINED/genome]
+    end
+
+    %% ── Alignment & split ──
+    subgraph ALIGN["🎯 ALIGNMENT & GENOME SPLIT"]
+        G[Bowtie2<br/>one pass to combined genome]
+        SAM[Combined SAM]
+        HS[Human reads<br/>-f 2 -F 2316, unique, orphan removal]
+        MT[samtools idxstats<br/>mitochondrial-pct QC]
+        FB[Filtered BAM<br/>keep chr1-22 / chrX]
+        SPK[Spike-in reads: prefix spikein_<br/>dedup + count]
+        SCNT[Spike-in read counts]
+    end
+
+    %% ── Dedup & blacklist ──
+    subgraph DEDUP["🔄 DEDUP & BLACKLIST"]
+        L[Picard MarkDuplicates<br/>REMOVE_DUPLICATES=true]
+        M[Deduplicated BAM]
+        N[Blacklist filtering<br/>bedtools]
+        O[Analysis BAM<br/>.nobl.bam]
+    end
+
+    %% ── Spike-in normalization ──
+    subgraph SPIKE["⚖️ SPIKE-IN NORMALIZATION"]
+        NF[compute_spikein_factors<br/>NF = min / count]
+        NFT[normalization_factors.tsv]
+        BW[create_bigwig<br/>RPGC track .bw]
+        SBW[create_spikein_bigwig<br/>scaleFactor NF .spikein.bw]
+    end
+
+    %% ── Peaks & consensus ──
+    subgraph PEAKS["🏔️ PEAKS & CONSENSUS"]
+        R[MACS2 callpeak<br/>-f BAMPE --nomodel -q 0.05]
+        S[narrowPeak]
+        CP[consensus_peaks<br/>Corces fixed-width / SPM<br/>majority-vote or IDR reproducibility]
+        CPB[consensus_peaks.bed / .saf]
+        FC[count_fragments_consensus<br/>featureCounts]
+        CM[consensus_counts.txt<br/>regions x samples]
+    end
+
+    %% ── QC metrics ──
+    subgraph QC["📊 QC METRICS - snakefile_ATAC_QC"]
+        FRAG[bamPEFragmentSize<br/>Fragment size + nucleosome signal]
+        FP[plotFingerprint<br/>Signal vs noise]
+        COR[multiBamSummary<br/>Correlation / PCA]
+        GC[computeGCBias]
+        TSS[computeMatrix TSS<br/>heatmap/profile + numeric score]
+        FRIP[FRiP]
+        QRLX[qc_relaxed_peaks<br/>MACS2 -p 0.1]
+        IDRQC[IDR<br/>replicate pairs]
+        CPLX[Library complexity<br/>NRF / PBC1 / PBC2]
+        SQC[Spike-in QC<br/>pct vs 2-10 target]
+        ANN[Reads in promoters / enhancers]
+        QCR[Interactive QC report<br/>atacseq_qc_report.html<br/>all QC except FastQC]
+        MQC[MultiQC — FastQC only<br/>multiqc_fastqc.html]
+    end
+
+    %% ── Differential ──
+    subgraph DIFF["🔬 DIFFERENTIAL - ATACseq_Dx.ipynb (R / diffbind container)"]
+        DE[DESeq2 differential binding<br/>NICD3 vs Ctrl · promoter/distal · paired<br/>spike-in + default normalization]
+        BT[Gviz genome-browser tracks<br/>23 curated targets: Notch + housekeeping/lineage<br/>spike-in + RPGC signal · 2 figures/gene]
+    end
+
+    %% Main flow
+    A --> B
+    A --> C
+    C --> E
+    HF --> BCG
+    SF --> BCG
+    BCG --> IDX
+    E --> G
+    IDX --> G
+    G --> SAM
+    SAM --> HS
+    SAM --> SPK
+    HS --> MT
+    MT --> FB
+    SPK --> SCNT
+    FB --> L
+    L --> M
+    M --> N
+    N --> O
+
+    %% Spike-in normalization
+    SCNT --> NF
+    NF --> NFT
+    O --> BW
+    O --> SBW
+    NFT --> SBW
+
+    %% Peaks & consensus
+    O --> R
+    R --> S
+    S --> CP
+    CP --> CPB
+    CPB --> FC
+    O --> FC
+    FC --> CM
+
+    %% QC
+    O --> FRAG
+    O --> FP
+    O --> COR
+    O --> GC
+    BW --> TSS
+    O --> FRIP
+    S --> FRIP
+    O --> QRLX
+    QRLX --> IDRQC
+    M --> CPLX
+    SCNT --> SQC
+    O --> SQC
+    O --> ANN
+    FRAG --> QCR
+    FP --> QCR
+    COR --> QCR
+    GC --> QCR
+    TSS --> QCR
+    FRIP --> QCR
+    IDRQC --> QCR
+    CPLX --> QCR
+    SQC --> QCR
+    ANN --> QCR
+    B --> MQC
+
+    %% Differential
+    CM --> DE
+    SBW --> BT
+    BW --> BT
+
+    %% Configuration (dotted)
+    CFG -.-> BCG
+    CFG -.-> G
+    CFG -.-> R
+    CFG -.-> CP
+    SC -.-> BCG
+    SC -.-> CP
+    BL -.-> N
+    GTF -.-> TSS
+    GTF -.-> BT
+    TB -.-> GC
+    PE -.-> ANN
+
+    %% Styling
+    classDef inputGroup fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef processGroup fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef spikeGroup fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef outputGroup fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef analysisGroup fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+
+    class INPUT inputGroup
+    class PREPROC,GENOME,ALIGN,DEDUP processGroup
+    class SPIKE,PEAKS spikeGroup
+    class QC outputGroup
+    class DIFF analysisGroup

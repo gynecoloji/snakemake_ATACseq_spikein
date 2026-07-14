@@ -1,0 +1,28 @@
+# Keep the Docker build context small: exclude large/generated data.
+# (Genomes, FASTQs and outputs are mounted at runtime, not copied into the image.)
+
+.git
+.gitignore
+.snakemake
+.superpowers
+data
+results
+logs
+docs
+tests/.pytest_cache
+**/__pycache__
+*.pdf
+*.ipynb
+*.svg
+*.mermaid
+
+# ref/: exclude the big genomes/indexes/annotations; keep only what the image needs
+ref/*
+!ref/config.yaml
+!ref/samples.csv
+!ref/*.py
+
+# host-built conda dirs (image builds its own)
+ref/COMBINED
+ref/SPIKEIN
+ref/ENSEMBL
