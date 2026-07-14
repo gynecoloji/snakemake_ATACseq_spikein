@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use this workflow, please cite it using these metadata."
+title: "snakemake_ATACseq_spikein: a spike-in–normalized ATAC-seq Snakemake workflow"
+abstract: >-
+  A Snakemake workflow for spike-in–normalized ATAC-seq analysis: concatenated
+  human + spike-in Bowtie2 alignment, filtering and blacklist removal, MACS2 peak
+  calling, Active Motif–style spike-in normalization, reproducible fixed-width
+  consensus peaks with a fragment-count matrix, and a comprehensive QC stage.
+type: software
+authors:
+  # >>> FILL IN: replace the surname; add your real ORCID or delete that line <<<
+  - given-names: "Ji"
+    family-names: "REPLACE-WITH-YOUR-SURNAME"
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+repository-code: "https://github.com/gynecoloji/snakemake_ATACseq_spikein"
+url: "https://github.com/gynecoloji/snakemake_ATACseq_spikein"
+license: MIT
+keywords:
+  - ATAC-seq
+  - Snakemake
+  - spike-in normalization
+  - consensus peaks
+  - epigenomics
+  - bioinformatics workflow
+# Match `version` + `date-released` to the release you archive on Zenodo.
+# Because v1.0.0 is already tagged (and predates the .test/schema work), archive a
+# fresh release cut at the current main; v1.1.0 is recommended (see README notes).
+version: v1.1.0
+date-released: "2026-07-14"
+# After the first Zenodo release, add the concept ("all versions") DOI:
+# identifiers:
+#   - type: doi
+#     value: "10.5281/zenodo.XXXXXXX"
+#     description: "Concept DOI (resolves to the latest version)"

@@ -1,10 +1,13 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+<!-- Replace zenodo.XXXXXXX (badge image + link) with your Zenodo concept
+     ("Cite all versions") DOI after the first archived release; update CITATION.cff too. -->
+
 ## Citation
 
-If you use this pipeline in your research, please cite:
-
-```
-https://github.com/gynecoloji/snakemake_ATACseq_spikein
-```
+If you use this workflow in your research, please cite it. Use the **"Cite this
+repository"** button on the GitHub repository page (generated from
+[`CITATION.cff`](CITATION.cff)), or cite the archived release on Zenodo via the DOI
+badge above — the concept DOI always resolves to the latest version.
 
 **Please also cite the individual tools used:**
 - **Snakemake**: Köster, J. and Rahmann, S. (2012). Snakemake—a scalable bioinformatics workflow engine. Bioinformatics, 28(19), 2520-2522.
@@ -752,9 +755,9 @@ logs/
 └── spikein_qc/, reads_in_annotations/, peak_summary/, multiqc_fastqc/
 ```
 
-## Citation
+## Citing the underlying tools
 
-If you use this pipeline, please cite the relevant tools:
+If you use this pipeline, please also cite the relevant tools:
 - Snakemake: Köster & Rahmann (2012)
 - MACS2: Zhang et al. (2008)
 - deepTools: Ramírez et al. (2016)
