@@ -40,42 +40,17 @@ replicates in each `group`:
 
 ## Parameters (`config/config.yaml`)
 
-### Inputs / alignment
+Every parameter — with its type, default, and description — is defined once in the
+config schema, [`workflow/schemas/config.schema.yaml`](../workflow/schemas/config.schema.yaml).
+That schema is the single source of truth: the workflow validates `config.yaml`
+against it on every run (and fills in defaults for anything you omit), and the
+[Snakemake Workflow Catalog](https://snakemake.github.io/snakemake-workflow-catalog/?usage=gynecoloji/snakemake_ATACseq_spikein)
+renders it as a parameter table on the workflow page.
 
-| key              | meaning                                                                                  |
-|------------------|------------------------------------------------------------------------------------------|
-| `samples_table`  | Path to the sample sheet (`config/samples.csv`).                                          |
-| `adapter_r1` / `adapter_r2` | Optional. Leave commented to auto-detect adapters (`--detect_adapter_for_pe`); set to force specific sequences. |
-| `human_fasta`    | Human genome FASTA. **Must be chr-prefixed UCSC** (chr1..chrX) to match the blacklist.    |
-| `spikein_fasta`  | Spike-in genome FASTA (any species: Drosophila dm6, yeast, E. coli, …).                   |
-| `spikein_prefix` | Prepended to spike-in chrom names before concatenation (avoids collisions, enables split).|
-| `combined_index` | Bowtie2 index prefix for the built human+spike-in reference.                              |
-| `align_chroms`   | Human chromosomes kept when building the index (`[]` = all).                              |
-| `keep_chroms`    | Analysis keep-set for the final human BAM (must be a subset of `align_chroms`).           |
-| `blacklist`      | ENCODE-style blacklist BED (chr-prefixed).                                                |
-
-### Peaks / spike-in / consensus
-
-| key                        | meaning                                                              |
-|----------------------------|----------------------------------------------------------------------|
-| `peak_types`               | Peak types to analyze (`["narrowPeak"]`; add `broadPeak` if needed). |
-| `effective_genome_size`    | For deepTools RPGC normalization (hg38 default provided).            |
-| `bin_size`                 | bigWig bin size (bp).                                                |
-| `consensus_window`         | Fixed consensus peak width around each summit (bp).                  |
-| `consensus_min_replicates` | Majority-vote threshold for ≥3-replicate groups.                     |
-| `idr_threshold`            | IDR threshold for 2-replicate groups.                               |
-| `idr_relaxed_pvalue`       | MACS2 `-p` for the relaxed calls used as IDR input.                 |
-| `idr_top_n_peaks`          | Top-N relaxed peaks retained per replicate for IDR.                 |
-| `keep_chroms_regex`        | Consensus chrom filter; keep consistent with `keep_chroms`.        |
-| `macs2_genome`             | MACS2 `-g` (`hs` for human).                                        |
-
-### QC
-
-| key                              | meaning                                                        |
-|----------------------------------|----------------------------------------------------------------|
-| `gtf`                            | GENCODE GTF (chr-prefixed) for TSS enrichment.                 |
-| `promoter_bed` / `enhancer_bed`  | BEDs for the reads-in-annotation QC (shipped in `ref/`).       |
-| `spikein_pct_min` / `spikein_pct_max` | Expected spike-in read-fraction band (%) for the QC status flag. |
+To configure a run, edit `config.yaml` directly — it ships with working defaults
+and an inline comment on every parameter. At minimum, point the reference-file
+paths (`human_fasta`, `spikein_fasta`, `blacklist`, `gtf`, `promoter_bed`,
+`enhancer_bed`) at the files you provide (see [Reference data](#reference-data)).
 
 ## Reference data
 

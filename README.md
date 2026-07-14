@@ -317,50 +317,27 @@ conda activate atacseq
 
 ## Configuration
 
-Edit `config/config.yaml` to match your experimental setup and reference files:
+All parameters live in `config/config.yaml`, which ships with working defaults and
+an inline comment on each one. The [config schema](workflow/schemas/config.schema.yaml)
+is the **single source of truth** for parameter types, defaults, and descriptions:
+the workflow validates your config against it on every run (and fills in defaults
+for anything you omit), and the
+[Snakemake Workflow Catalog](https://snakemake.github.io/snakemake-workflow-catalog/?usage=gynecoloji/snakemake_ATACseq_spikein)
+renders it as a parameter table on the workflow page. See
+[`config/README.md`](config/README.md) for the sample sheet and reference-data details.
+
+At minimum, point the reference-file paths at the genomes/annotation you provide
+(see [Data Preparation](#data-preparation)):
 
 ```yaml
-# ── Samples ──
-samples_table: "config/samples.csv"       # columns: sample_id, type, group
-
-# ── Adapter trimming (fastp) ──
-# Omit or leave empty  ->  fastp AUTO-DETECTS adapters for PE reads (--detect_adapter_for_pe).
-# Provide both to OVERRIDE auto-detection with explicit sequences (Illumina shown):
-# adapter_r1: "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA"
-# adapter_r2: "AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT"
-
-# ── Alignment: concatenated (human + spike-in) reference ──
-human_fasta:    "ref/hg38.fa"             # chr-prefixed UCSC hg38 (you provide)
-spikein_fasta:  "ref/dm6.fa"              # spike-in genome, ANY species (you provide)
-spikein_prefix: "spikein_"                # prepended to spike-in chrom names (to split reads)
-combined_index: "ref/COMBINED/genome"     # built by the pipeline
-align_chroms: [chr1, ..., chr22, chrX, chrM]    # human chroms that enter the index
-keep_chroms:  [chr1, ..., chr22, chrX]          # analysis chroms in the final BAM (drop chrM/chrY)
-
-# ── Peaks / blacklist / bigWig ──
-blacklist: "ref/hg38_blacklist_regions.bed"
-macs2_genome: "hs"
-effective_genome_size: 2913022398
-bin_size: 25
-
-# ── Consensus peaks & IDR ──
-consensus_window: 500                     # fixed peak width (bp)
-consensus_min_replicates: 2               # majority-vote threshold (>=3-replicate conditions)
-idr_threshold: 0.05
-idr_relaxed_pvalue: 0.1
-idr_top_n_peaks: 150000
-keep_chroms_regex: "^chr([1-9]|1[0-9]|2[0-2]|X)$"
-
-# ── QC pipeline ──
-gtf: "ref/gencode.v36.annotation.gtf"
-promoter_bed: "ref/promoter_chr1-22X.bed"
-enhancer_bed: "ref/enhancer_chr1-22X.bed"
-spikein_pct_min: 2                        # Active Motif spike-in target range (%)
-spikein_pct_max: 10
+samples_table: "config/samples.csv"                # sample sheet (sample_id, type, group)
+human_fasta:   "ref/hg38.fa"                       # chr-prefixed UCSC hg38 (you provide)
+spikein_fasta: "ref/dm6.fa"                        # spike-in genome, ANY species (you provide)
+gtf:           "ref/gencode.v36.annotation.gtf"    # GENCODE, chr-prefixed (for TSS-enrichment QC)
 ```
-See `config/config.yaml` for the complete, commented file, and `config/README.md`
-for a full parameter reference. To switch spike-in species, change `spikein_fasta`
-(the combined index is rebuilt automatically).
+
+To switch spike-in species, change `spikein_fasta` (the combined index is rebuilt
+automatically).
 
 ## Data Preparation
 
