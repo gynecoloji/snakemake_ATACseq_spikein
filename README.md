@@ -26,10 +26,10 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Contact
 
 **Author**: gynecoloji  
-**Project Repository**: [https://github.com/gynecoloji/SnakeMake_ATACseq](https://github.com/gynecoloji/SnakeMake_ATACseq)
+**Project Repository**: [https://github.com/gynecoloji/snakemake_ATACseq_spikein](https://github.com/gynecoloji/snakemake_ATACseq_spikein)
 
 For questions, issues, or feature requests, please:
-1. Check the existing [Issues](https://github.com/gynecoloji/SnakeMake_ATACseq/issues) on GitHub
+1. Check the existing [Issues](https://github.com/gynecoloji/snakemake_ATACseq_spikein/issues) on GitHub
 2. Submit a new issue with detailed information about your problem
 3. Include relevant log files and system information for troubleshooting
 
@@ -295,8 +295,8 @@ whereas a gene can have several — the pipeline's deepTools TSS-enrichment QC a
 
 ```bash
 # Clone the repository
-git clone https://github.com/gynecoloji/SnakeMake_ATACseq.git
-cd SnakeMake_ATACseq
+git clone https://github.com/gynecoloji/snakemake_ATACseq_spikein.git
+cd snakemake_ATACseq_spikein
 
 # You need Snakemake + conda/mamba as the driver. The per-rule tool environments
 # (envs/*.yaml) are created automatically on the first `--use-conda` run — you do
