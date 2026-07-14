@@ -183,7 +183,7 @@ ref/
 ├── dm6.fa                               # spike-in genome FASTA (e.g. Drosophila)
 ├── hg38.2bit                            # human genome 2bit (QC: GC bias)
 ├── gencode.v36.annotation.gtf           # GENCODE annotation (TSS, gene models)
-├── FANTOM5_CAGE_peaks_hg38.bed.gz       # FANTOM5 robust CAGE peaks (empirical TSS)
+├── FANTOM5_CAGE_peaks_hg38.bed.gz       # FANTOM5 CAGE peaks (optional; only to rebuild the CAGE set)
 ├── picard.jar                           # Picard (MarkDuplicates)
 │
 │  ── shipped, or generated from the downloads ──
@@ -191,10 +191,10 @@ ref/
 ├── hg38.fa.fai                          # faidx of hg38.fa                        (generated)
 ├── promoter_chr1-22X.bed                # Ensembl Regulatory Build promoters      (shipped; QC reads-in-annotation)
 ├── enhancer_chr1-22X.bed                # Ensembl Regulatory Build enhancers      (shipped; QC reads-in-annotation)
-├── Promoter_UCSC_hg38_{3000,5000}bp_chr1-22X.bed           # TSS±N, per transcript      (generated)
-├── Promoter_uniqueTSS_hg38_{3000,5000}bp_chr1-22X.bed      # TSS±N, unique TSS          (generated)
-├── Promoter_MANEcanonical_hg38_{3000,5000}bp_chr1-22X.bed  # TSS±N, one per gene (MANE) (generated)
-├── Promoter_FANTOM5CAGE_hg38_{3000,5000}bp_chr1-22X.bed    # TSS±N, empirical CAGE      (generated)
+├── Promoter_uniqueTSS_hg38_{3000,5000}bp_chr1-22X.bed      # TSS±N, unique TSS          (shipped)
+├── Promoter_MANEcanonical_hg38_{3000,5000}bp_chr1-22X.bed  # TSS±N, one per gene (MANE) (shipped)
+├── Promoter_FANTOM5CAGE_hg38_{3000,5000}bp_chr1-22X.bed    # TSS±N, empirical CAGE      (shipped)
+│      # per-transcript set (Promoter_UCSC_hg38_*bp) not shipped — `build_promoter_beds.py transcript`
 ├── COMBINED/                            # combined human+spike-in Bowtie2 index   (built by the pipeline)
 │
 │  ── shipped scripts ──
@@ -224,7 +224,8 @@ curl -O https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.2bit
 curl -O http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_36/gencode.v36.annotation.gtf.gz
 gunzip gencode.v36.annotation.gtf.gz
 
-# FANTOM5 robust CAGE peaks (hg38) — empirical TSS for the CAGE promoter set
+# FANTOM5 robust CAGE peaks (hg38) — OPTIONAL: only needed to rebuild the CAGE
+# promoter set (the built Promoter_FANTOM5CAGE_*.bed already ships with the repo)
 curl -L -o FANTOM5_CAGE_peaks_hg38.bed.gz \
   "https://fantom.gsc.riken.jp/5/datafiles/reprocessed/hg38_latest/extra/CAGE_peaks/hg38_fair+new_CAGE_peaks_phase1and2.bed.gz"
 
@@ -247,9 +248,13 @@ curl -L https://github.com/Boyle-Lab/Blacklist/raw/master/lists/hg38-blacklist.v
 # faidx of the human genome (used to clamp promoter windows to chromosome ends)
 samtools faidx ref/hg38.fa
 
-# Promoter BEDs at TSS ±3kb and ±5kb, all four TSS definitions (~6 s)
-python ref/build_promoter_beds.py all
-# ...or one definition at a time:  transcript | unique | mane | cage
+# The promoter TSS BEDs (unique / MANE / CAGE) already ship with the repo. Rebuild
+# them only after updating the GTF, or to also produce the per-transcript set:
+python ref/build_promoter_beds.py all          # modes: unique | mane | cage | transcript | all
+# (needs ref/hg38.fa.fai + the GTF; the `cage` mode also needs the FANTOM5 download above)
+# Kept chromosomes default to `keep_chroms` in ref/config.yaml (currently chr1-22,X);
+# override per run with e.g. --chroms chr1,chr2,chrX  or  --chroms all  (the filename
+# scope token, e.g. chr1-22X, auto-adjusts; set it explicitly with --label).
 
 # The combined human+spike-in Bowtie2 index (ref/COMBINED/) is built automatically
 # by the pipeline's build_combined_genome rule from hg38.fa + dm6.fa — no manual step.
@@ -276,6 +281,9 @@ CAGE is BED6.
 | `unique` | distinct (chrom, TSS, strand) tuples | 205,696 | as `transcript`, without isoform double-counting |
 | `mane` | one canonical TSS per gene (MANE Select, else 5′-most) | 60,058 | one row per gene; ENCODE-comparable TSS-enrichment reference |
 | `cage` | FANTOM5 robust CAGE peak position (empirical) | 209,146 | data-defined start sites, incl. promoters annotation misses |
+
+The repo ships the **`unique`, `mane`, and `cage`** sets (each at ±3kb and ±5kb); the
+per-transcript set is generate-on-demand (`build_promoter_beds.py transcript`).
 
 Cross-check: **90.6%** of protein-coding MANE-canonical TSSs have a FANTOM5 CAGE peak
 within 500 bp (strong annotation↔empirical agreement); non-coding genes only **24.9%**

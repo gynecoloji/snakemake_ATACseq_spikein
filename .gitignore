@@ -18,6 +18,7 @@ ref/ENSEMBL/
 # ref/Promoter_uniqueTSS_hg38_*bp_chr1-22X.bed
 # ref/Promoter_MANEcanonical_hg38_*bp_chr1-22X.bed
 # ref/Promoter_FANTOM5CAGE_hg38_*bp_chr1-22X.bed
+ref/FANTOM5_CAGE_peaks_hg38.bed.gz
 
 # ── Raw data & pipeline outputs ──
 data/*
