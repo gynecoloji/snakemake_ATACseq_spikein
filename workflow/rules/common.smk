@@ -7,6 +7,13 @@ import pandas as pd
 import re
 import os
 from itertools import combinations
+from snakemake.utils import validate
+
+# ── Config validation ───────────────────────────────────────────────────
+# Validate against workflow/schemas/config.schema.yaml (also fills in defaults
+# for any omitted parameters). The catalog renders the parameter table from the
+# same schema. Path is relative to this file (workflow/rules/).
+validate(config, "../schemas/config.schema.yaml")
 
 # ── Samples ─────────────────────────────────────────────────────────────
 samples_df = pd.read_csv(config["samples_table"])
