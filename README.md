@@ -3,7 +3,7 @@
 If you use this pipeline in your research, please cite:
 
 ```
-https://github.com/gynecoloji/SnakeMake_ATACseq
+https://github.com/gynecoloji/snakemake_ATACseq_spikein
 ```
 
 **Please also cite the individual tools used:**
@@ -417,6 +417,14 @@ Or execute it headless (writes `results/diff_region/` + `results/browser_tracks/
 jupyter nbconvert --to notebook --execute --inplace \
     --ExecutePreprocessor.kernel_name=ir ATACseq_Dx.ipynb
 ```
+No local R/Bioconductor install? Run it in the **`atacseq-diffbind`** container (pull it
+from [Container Execution](#container-execution-docker--apptainer)); Apptainer auto-mounts
+the current directory:
+```bash
+apptainer exec atacseq-diffbind.sif \
+    jupyter nbconvert --to notebook --execute --inplace \
+    --ExecutePreprocessor.kernel_name=ir ATACseq_Dx.ipynb
+```
 
 ### Cluster Execution
 
@@ -429,12 +437,31 @@ snakemake -s snakefile_ATACseq --use-conda \
 
 ### Container Execution (Docker / Apptainer)
 
-The workflow is published as a container image, **`gynecoloji/atacseq-spikein`**, with
-Snakemake and all five per-rule conda environments pre-built — so you install nothing
-except Docker or Apptainer. Genomes/FASTQs are **not** baked into the image; you mount
-your project directory at run time (see [`DOCKER.md`](DOCKER.md) for the exact `ref/` and
-`data/` files the container expects). As always, run the primary pipeline first, then the
-QC pipeline.
+Two prebuilt images cover the whole workflow — you install nothing except Docker or
+Apptainer:
+
+| Image | Contents | Used for |
+|---|---|---|
+| **`gynecoloji/atacseq-spikein`** | Snakemake + all five per-rule conda envs | primary pipeline + QC pipeline |
+| **`gynecoloji/atacseq-diffbind`** | R / Bioconductor (DESeq2, ChIPseeker, Gviz) + `ir` Jupyter kernel | `ATACseq_Dx.ipynb` differential analysis |
+
+**Download** — pull with Docker, or convert to a local `.sif` once for Apptainer /
+Singularity (HPC):
+
+```bash
+# Docker
+docker pull gynecoloji/atacseq-spikein:latest
+docker pull gynecoloji/atacseq-diffbind:latest
+
+# Apptainer / Singularity  (writes ./atacseq-*.sif in the current directory)
+apptainer pull atacseq-spikein.sif  docker://gynecoloji/atacseq-spikein:latest
+apptainer pull atacseq-diffbind.sif docker://gynecoloji/atacseq-diffbind:latest
+```
+
+Genomes/FASTQs are **not** baked into the images; you mount your project directory at run
+time (see [`DOCKER.md`](DOCKER.md) for the exact `ref/` and `data/` files the container
+expects). Run the primary pipeline first, then QC; the differential notebook runs in the
+diffbind image (see [Differential Analysis](#differential-analysis)).
 
 The image's entrypoint is
 `snakemake --use-conda --conda-frontend mamba --conda-prefix /opt/wf-conda`, so anything
