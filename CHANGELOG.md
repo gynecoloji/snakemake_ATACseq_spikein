@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.1.1...v1.2.0) (2026-07-19)
+
+
+### Added
+
+* add differential-openness stage with selectable normalization ([f24bee8](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/f24bee8429f24e26d64492981a9dcd714881c7ba))
+* add native Apptainer build definition for the sif ([f93d510](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/f93d510066c1fb7d9982b88d3e29c396f23eb9f0))
+
+
+### Documentation
+
+* embed tube-map diagram in README ([34864d4](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/34864d4366dd30d635a05eb546c3377757702bd0))
+* fix Code of Conduct contact email ([899e385](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/899e385b15027a9cbd1a2c6869910c5014bfd3bb))
+* replace rule graph with snakevision tube map ([c63b04b](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/c63b04bf9691666794821582809843ff25fccf87))
+
 ## [1.1.1](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.1.0...v1.1.1) (2026-07-14)
 
 
