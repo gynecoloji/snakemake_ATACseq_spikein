@@ -32,9 +32,29 @@ docker compose build
 # or:  docker build -t atacseq-spikein:latest .
 ```
 
-This pre-builds the 5 conda envs into the image (a few GB; ~15–30 min the first
-time). For a reproducible image, pin the base tag in the `Dockerfile`
-(`FROM condaforge/miniforge3:<version>`).
+This pre-builds the **6** conda envs into the image (a few GB). Expect a long
+first build — the `r-diffopen` env (DESeq2/apeglm/GenomicRanges) makes the
+Bioconductor solve the slowest step. For a reproducible image, pin the base tag
+in the `Dockerfile` (`FROM condaforge/miniforge3:<version>`).
+
+### No Docker? Build the `.sif` natively with Apptainer
+
+On HPC you usually have Apptainer but not Docker. [`apptainer.def`](apptainer.def)
+mirrors the Dockerfile, so you can build the image directly:
+
+```bash
+module load apptainer                     # if your cluster uses modules
+cd /path/to/snakemake_ATACseq_spikein     # must run from the repo root (%files context)
+apptainer build --fakeroot atacseq-spikein.sif apptainer.def
+```
+
+Because this is a long, memory-hungry build, run it as a batch job rather than on
+a login node, and point Apptainer's scratch at a large filesystem:
+
+```bash
+export APPTAINER_TMPDIR=/big/scratch/apptainer_tmp
+export APPTAINER_CACHEDIR=/big/scratch/apptainer_cache
+```
 
 ## 3. Run
 

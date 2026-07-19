@@ -1,0 +1,82 @@
+# Native Apptainer build of the ATAC-seq spike-in workflow image.
+#
+# Mirrors the Dockerfile, for HPC users who have Apptainer but no Docker:
+#   module load apptainer
+#   apptainer build --fakeroot atacseq-spikein.sif apptainer.def   # run from repo root
+#   apptainer run atacseq-spikein.sif -s workflow/Snakefile --cores 16
+#
+# Ships Snakemake plus the SIX pre-built per-rule conda envs (snakemake,
+# deeptools, macs2, idr, bedtools, r-diffopen) at /opt/wf-conda, and runs with
+# --use-conda. The R env (DESeq2/apeglm/GenomicRanges) makes the build notably
+# slower than the Docker image used to be — Bioconductor solves are heavy.
+#
+# Genomes/FASTQs are NOT baked in: bind-mount your project at runtime.
+
+Bootstrap: docker
+From: condaforge/miniforge3:latest
+
+%files
+    workflow /workflow/
+    config /workflow/
+    tests /workflow/
+    create_envs.smk /workflow/
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+    export WF_CONDA_PREFIX=/opt/wf-conda
+
+    # Minimal system deps (git helps Snakemake's conda handling; procps for subprocesses)
+    apt-get update
+    apt-get install -y --no-install-recommends git procps ca-certificates
+    rm -rf /var/lib/apt/lists/*
+
+    # FLEXIBLE channel priority: the env files are fully-pinned exports whose exact
+    # builds span conda-forge/bioconda/defaults, so strict priority would wrongly
+    # exclude pins living in a lower-priority channel. Also accept the Anaconda
+    # "defaults" ToS so the non-interactive solve does not stall.
+    conda config --system --set channel_priority flexible
+    conda tos accept --override-channels \
+        --channel https://repo.anaconda.com/pkgs/main \
+        --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
+
+    # Snakemake driver in its OWN env: the miniforge base pins Python 3.13, but
+    # snakemake-minimal 9.3.2 needs Python <3.13. pandas is required because the
+    # Snakefiles import it at parse time.
+    mamba create -y -n driver -c conda-forge -c bioconda \
+        python=3.12 snakemake-minimal=9.3.2 pandas
+    mamba clean -afy
+    export PATH=/opt/conda/envs/driver/bin:$PATH
+
+    # Pre-build every per-rule conda env INTO the image, keyed by env-file content
+    # so they are reused at runtime via --conda-prefix.
+    cd /workflow
+    snakemake -s create_envs.smk --use-conda --conda-create-envs-only \
+        --conda-frontend mamba --conda-prefix "$WF_CONDA_PREFIX" --cores 1
+    mamba clean -afy
+    rm -rf /workflow/build /workflow/.snakemake
+
+%environment
+    export LANG=C.UTF-8
+    export LC_ALL=C.UTF-8
+    export WF_CONDA_PREFIX=/opt/wf-conda
+    export PATH=/opt/conda/envs/driver/bin:$PATH
+
+%runscript
+    exec snakemake --use-conda --conda-frontend mamba \
+        --conda-prefix /opt/wf-conda "$@"
+
+%labels
+    org.opencontainers.image.title atacseq-spikein-snakemake
+    org.opencontainers.image.description ATAC-seq spike-in + consensus + QC (Snakemake, --use-conda)
+    org.opencontainers.image.source https://github.com/gynecoloji/snakemake_ATACseq_spikein
+
+%help
+    ATAC-seq spike-in normalization + consensus peaks + QC (Snakemake).
+
+    Run from your project directory (Apptainer auto-mounts the CWD):
+      apptainer run atacseq-spikein.sif -s workflow/Snakefile --cores 16
+      apptainer run atacseq-spikein.sif -s workflow/Snakefile --cores 16 atacseq_all
+      apptainer run atacseq-spikein.sif -s workflow/Snakefile --cores 8  diffopen_all
+
+    Reference genomes/annotation must be present under ref/ (see config/README.md).
