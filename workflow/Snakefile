@@ -7,6 +7,11 @@
 #   snakemake --use-conda --cores 20 atacseq_all     # primary pipeline only
 #   snakemake --use-conda --cores 20 qc_all          # QC only (after primary)
 #
+# Differential openness is an OPT-IN stage (needs >=2 conditions in samples.csv);
+# it is not part of the default target:
+#   snakemake --use-conda --cores 20 diffopen_all          # none + spikein + ctcf
+#   snakemake --use-conda --cores 20 diffopen_anchor_shape # hybrid (Method 6)
+#
 # Reference genomes/annotation are provided by the user under ref/ (see README).
 
 from snakemake.utils import min_version
@@ -20,6 +25,7 @@ configfile: "config/config.yaml"
 include: "rules/common.smk"
 include: "rules/atacseq.smk"
 include: "rules/qc.smk"
+include: "rules/diffopen.smk"
 
 
 rule all:

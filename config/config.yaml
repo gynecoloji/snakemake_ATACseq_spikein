@@ -54,3 +54,19 @@ promoter_bed: "ref/promoter_chr1-22X.bed"       # reads-in-annotation QC
 enhancer_bed: "ref/enhancer_chr1-22X.bed"
 spikein_pct_min: 2                              # Active Motif spike-in target lower bound (%)
 spikein_pct_max: 10                             # upper bound (%)
+
+# ── Differential openness (opt-in: `snakemake diffopen_all`) ────────────
+# Constitutive-CTCF anchor set (ENCODE SCREEN "CTCF-only" cCREs) used by the
+# `ctcf` normalization mode and by the anchor+shape hybrid.
+ctcf_bed: "ref/GRCh38-cCREs.CTCF-only.bed"
+# Which normalizations to run for `diffopen_all`. Each writes its own directory
+# under results/diffopen/ so the modes can be compared:
+#   none    - DESeq2 median-of-ratios over all peaks (baseline)
+#   spikein - size factors from the Drosophila spike-in depth
+#   ctcf    - median-of-ratios restricted to CTCF anchors (spike-in free)
+diffopen_modes: ["none", "spikein", "ctcf"]
+diffopen_ref_label: "Control"        # reference level of the `type` column
+# Hybrid anchor+shape (Method 6) parameters — rule diffopen_anchor_shape
+anchor_shape_span: 0.6               # loess span for the intensity-dependent shape
+anchor_shape_trim_k: 2.5             # MAD multiplier for trimming CTCF anchors that move
+anchor_shape_iter: 2                 # shape/trim refinement iterations

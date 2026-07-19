@@ -65,6 +65,32 @@ TSS-enrichment score, FRiP, IDR on relaxed peaks, library complexity
 FastQC-only MultiQC report, and a self-contained interactive HTML QC report
 (`results/qc/atacseq_qc_report.html`).
 
+## Steps (differential openness — opt-in)
+
+Not part of the default target; requires ≥2 conditions in `config/samples.csv`.
+Runs DESeq2 (R) over the consensus count matrix, differing only in how the
+per-sample size factors are established:
+
+- **`diffopen` (wildcard `mode`)** — `none` (median-of-ratios over all peaks),
+  `spikein` (size factors from Drosophila spike-in depth), or `ctcf`
+  (median-of-ratios restricted to constitutive CTCF anchors from `ctcf_bed`;
+  spike-in free). Paired design `~pair + condition` is used when each pair
+  appears exactly once per condition, else `~condition`.
+- **`diffopen_anchor_shape`** — hybrid Method 6: the *level* comes from the
+  spike-in, an intensity-dependent *shape* is fit by loess on CTCF anchors
+  (iteratively trimming anchors that move between conditions), and the combined
+  per-region offset is injected as DESeq2 `normalizationFactors`.
+
+Targets: `diffopen_all` (all configured modes) and `diffopen_anchor_shape`.
+Outputs per mode under `results/diffopen/<mode>/`: `differential_openness.tsv`,
+`size_factors.tsv`, `run_summary.txt`, and diagnostic plots. Both rules use
+`workflow/envs/r-diffopen.yaml` (DESeq2, apeglm, GenomicRanges).
+
+Only `spikein` and `anchor_shape` can detect a genuine genome-wide shift; `none`
+and `ctcf` define the global level as invariant by construction. Compare the
+`run_summary.txt` files — a size-factor spread that tracks condition indicates a
+confounded normalization.
+
 ## Outputs
 
 All outputs are written under `results/` (peaks, bigWigs, consensus matrix, QC

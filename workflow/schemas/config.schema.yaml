@@ -147,6 +147,48 @@ properties:
     description: Upper bound (%) of the expected spike-in read fraction; drives the QC status flag.
     default: 10
 
+  ctcf_bed:
+    type: string
+    description: >-
+      Constitutive-CTCF anchor BED (ENCODE SCREEN "CTCF-only" cCREs), used by the
+      `ctcf` differential-openness normalization and the anchor+shape hybrid.
+    default: ref/GRCh38-cCREs.CTCF-only.bed
+  diffopen_modes:
+    type: array
+    items:
+      type: string
+      enum: [none, spikein, ctcf]
+    description: >-
+      Normalization modes run by the opt-in `diffopen_all` target, each written to
+      its own results/diffopen/<mode>/ directory: `none` = DESeq2 median-of-ratios
+      over all peaks, `spikein` = size factors from Drosophila spike-in depth,
+      `ctcf` = median-of-ratios restricted to CTCF anchors (spike-in free).
+    default: [none, spikein, ctcf]
+  diffopen_ref_label:
+    type: string
+    description: >-
+      Reference level of the sample sheet's `type` column (the denominator of the
+      contrast), e.g. "Control" for a NICD3-vs-Control comparison.
+    default: Control
+  anchor_shape_span:
+    type: number
+    minimum: 0
+    maximum: 1
+    description: loess span for the intensity-dependent shape curve (anchor+shape hybrid).
+    default: 0.6
+  anchor_shape_trim_k:
+    type: number
+    minimum: 0
+    description: >-
+      MAD multiplier for trimming CTCF anchors that move between conditions, so
+      only invariant sites shape the correction (anchor+shape hybrid).
+    default: 2.5
+  anchor_shape_iter:
+    type: integer
+    minimum: 1
+    description: Shape-fit / anchor-trim refinement iterations (anchor+shape hybrid).
+    default: 2
+
 required:
   - samples_table
   - human_fasta

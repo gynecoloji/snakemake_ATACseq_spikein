@@ -54,6 +54,10 @@ COMPLEXITY_DIR = f"{RESULT_DIR}/library_complexity"
 SPIKEIN_QC_DIR = f"{RESULT_DIR}/spikein_qc"
 ANNOT_DIR      = f"{RESULT_DIR}/peak_annotation"
 
+# ── Differential openness (opt-in stage; see rules/diffopen.smk) ─────────
+DIFFOPEN_DIR   = f"{RESULT_DIR}/diffopen"
+DIFFOPEN_MODES = config.get("diffopen_modes", ["none", "spikein", "ctcf"])
+
 # ── Reference data / config ─────────────────────────────────────────────
 GENOME_2BIT  = os.path.join("ref", "hg38.2bit")   # QC: computeGCBias --genome
 GTF_FILE     = config["gtf"]
@@ -106,3 +110,16 @@ FASTP_ADAPTER_ARGS = _fastp_adapter_args()
 
 def _group_relaxed_inputs(wildcards):
     return [f"{RELAXED_PEAKS_DIR}/{s}_relaxed.narrowPeak" for s in GROUPS[wildcards.group]]
+
+def _diffopen_extra_input(wildcards):
+    """Mode-specific extra input for the `diffopen` rule.
+
+    none    -> no extra input (DESeq2 median-of-ratios over all peaks)
+    spikein -> the spike-in normalization factor table
+    ctcf    -> the constitutive-CTCF anchor BED
+    """
+    if wildcards.mode == "spikein":
+        return {"spikein": f"{SPIKEIN_DIR}/normalization_factors.tsv"}
+    if wildcards.mode == "ctcf":
+        return {"ctcf": config.get("ctcf_bed", "ref/GRCh38-cCREs.CTCF-only.bed")}
+    return {}

@@ -1,0 +1,16 @@
+# Lean R / Bioconductor environment for the differential-openness rules
+# (workflow/scripts/diffopen.R and spikein_anchor_shape.R).
+#
+# Kept deliberately small — DESeq2 already pulls most of the Bioconductor core.
+# apeglm is needed for lfcShrink(); GenomicRanges/IRanges for the CTCF-anchor
+# overlap. This env is pre-built into the container by create_envs.smk.
+name: r-diffopen
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.3
+  - bioconductor-deseq2
+  - bioconductor-apeglm
+  - bioconductor-genomicranges
+  - bioconductor-iranges

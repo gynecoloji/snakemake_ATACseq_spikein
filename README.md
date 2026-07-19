@@ -406,7 +406,41 @@ snakemake -s workflow/Snakefile --use-conda --cores 20 atacseq_all   # primary o
 snakemake -s workflow/Snakefile --use-conda --cores 20 qc_all        # QC only (after primary)
 ```
 
-### Differential Analysis
+### Differential Openness (opt-in, R / DESeq2)
+
+A differential-accessibility stage over the consensus count matrix, with a
+**selectable normalization** so you can see how much the answer depends on it.
+It is **not** part of the default target (it needs ≥2 conditions in
+`config/samples.csv`); request it explicitly:
+
+```bash
+# all configured modes (none + spikein + ctcf), one directory each
+snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_all
+
+# hybrid "anchor + shape" (Method 6)
+snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_anchor_shape
+```
+
+| mode | size factors from | detects a true global shift? |
+|---|---|---|
+| `none` | DESeq2 median-of-ratios over **all** peaks (baseline) | No — global change defined as zero |
+| `spikein` | **Drosophila spike-in** read depth | **Yes** — but only if the spike-in is trustworthy |
+| `ctcf` | median-of-ratios restricted to **constitutive CTCF anchors** (`ctcf_bed`), spike-in free | No — CTCF level assumed invariant |
+| `anchor_shape` | hybrid: **level** from the spike-in, intensity-dependent **shape** from CTCF anchors (anchors that move are trimmed) | Yes, with a shape correction |
+
+Each mode writes `differential_openness.tsv`, `size_factors.tsv`, `run_summary.txt`
+and an MA plot to `results/diffopen/<mode>/`. **Compare the `run_summary.txt`
+files before trusting any single mode** — a large size-factor spread that tracks
+condition means that normalization is confounded. (In our GSF4007 data the
+spike-in factors spanned 5× and separated by condition, which is why the
+spike-in-free `ctcf` mode exists.)
+
+Reference: `ctcf_bed` defaults to `ref/GRCh38-cCREs.CTCF-only.bed` (ENCODE SCREEN
+"CTCF-only" cCREs). Note that this SCREEN set is only partly cell-type-invariant;
+the `anchor_shape` mode mitigates that by trimming anchors that move between
+conditions.
+
+### Differential Analysis (notebook)
 `ATACseq_Dx.ipynb` is an **R** notebook (`ir` kernel); run it in the **`atacseq-diffbind`**
 environment. Interactively:
 ```bash
