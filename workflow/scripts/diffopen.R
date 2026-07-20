@@ -223,13 +223,22 @@ fit_class <- function(counts, coords, condition, pair, size_factors, idx = NULL,
   shr <- tryCatch(DESeq2::lfcShrink(dds, coef = cf, type = "apeglm"),
                   error = function(e) { message("lfcShrink failed; using unshrunk LFC"); res })
   list(
+    # Both the shrunk and the raw effect size are reported. apeglm's posterior
+    # can collapse -- here it returned an lfcSE constant to 4 decimals across
+    # every quantile of a 105k-peak matrix, squashing log2FoldChange to ~0 for
+    # the bulk while leaving the top hits intact. The _MLE columns are the
+    # unshrunk GLM estimate, which is what PyDESeq2 reports and what should be
+    # used for any effect-size threshold or cross-tool comparison. The p-values
+    # come from the unshrunk Wald test either way and are unaffected.
     table = data.frame(coords,
-                       baseMean       = res$baseMean,
-                       log2FoldChange = shr$log2FoldChange,
-                       lfcSE          = shr$lfcSE,
-                       stat           = res$stat,
-                       pvalue         = res$pvalue,
-                       padj           = res$padj,
+                       baseMean           = res$baseMean,
+                       log2FoldChange     = shr$log2FoldChange,
+                       lfcSE              = shr$lfcSE,
+                       log2FoldChange_MLE = res$log2FoldChange,
+                       lfcSE_MLE          = res$lfcSE,
+                       stat               = res$stat,
+                       pvalue             = res$pvalue,
+                       padj               = res$padj,
                        row.names = NULL, check.names = FALSE),
     contrast = cf,
     n        = nrow(counts),

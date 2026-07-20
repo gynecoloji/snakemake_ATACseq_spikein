@@ -199,11 +199,17 @@ run_deseq2 <- function(counts, coords, condition, pair, NF, g0, idx = NULL,
   shr <- tryCatch(DESeq2::lfcShrink(dds, coef = cf, type = "apeglm"),
                   error = function(e) res)
   list(
+    # _MLE = unshrunk GLM estimate. apeglm's posterior can collapse (see
+    # diffopen.R), leaving log2FoldChange ~0 for the bulk of peaks; use the MLE
+    # columns for effect-size thresholds and for comparison with PyDESeq2.
     table = data.frame(coords,
              baseMean          = res$baseMean,
              log2FoldChange    = shr$log2FoldChange,   # ABSOLUTE (spike-anchored)
              excess_over_global= shr$log2FoldChange - g0,  # local rho effect
              lfcSE             = shr$lfcSE,
+             log2FoldChange_MLE= res$log2FoldChange,
+             lfcSE_MLE         = res$lfcSE,
+             excess_over_global_MLE = res$log2FoldChange - g0,
              pvalue            = res$pvalue,
              padj              = res$padj,
              row.names = NULL, check.names = FALSE),
