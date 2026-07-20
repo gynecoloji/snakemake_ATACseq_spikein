@@ -71,6 +71,11 @@ ctcf_bed: "ref/constitutive_ctcf_hg38.bed"
 #   ctcf    - median-of-ratios restricted to CTCF anchors (spike-in free)
 diffopen_modes: ["none", "spikein", "ctcf"]
 diffopen_ref_label: "Control"        # reference level of the `type` column
+# `ctcf` mode: iteratively drop anchors that actually MOVED between conditions
+# (>|trim_k| MADs from the median shift) and re-estimate on the survivors, so a
+# few responsive/artefactual anchors can't drag the size factors.
+ctcf_trim_k: 2.5                     # MAD multiplier; set very large to disable trimming
+ctcf_trim_iter: 2                    # trim/re-estimate iterations (0 = no trimming)
 # Hybrid anchor+shape (Method 6) parameters — rule diffopen_anchor_shape
 anchor_shape_span: 0.6               # loess span for the intensity-dependent shape
 anchor_shape_trim_k: 2.5             # MAD multiplier for trimming CTCF anchors that move

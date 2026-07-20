@@ -41,7 +41,8 @@ suppressPackageStartupMessages({
 
 # ---- tiny --key value arg parser -------------------------------------------
 parse_args <- function(args) {
-  out <- list(mode = "none", `ref-label` = "Control", `min-anchors` = "200")
+  out <- list(mode = "none", `ref-label` = "Control", `min-anchors` = "200",
+              `trim-k` = "2.5", `trim-iter` = "2")
   i <- 1
   while (i <= length(args)) {
     key <- sub("^--", "", args[i]); out[[key]] <- args[i + 1]; i <- i + 2
@@ -102,11 +103,52 @@ size_factors_spikein <- function(spike) {
 
 #' Median-of-ratios restricted to a subset of rows (the CTCF anchors).
 #' sf_i = exp( median_g [ log(K_gi + 0.5) - mean_j log(K_gj + 0.5) ] ), geomean 1.
-size_factors_ctcf <- function(counts, anchor_idx) {
-  lc  <- log(counts[anchor_idx, , drop = FALSE] + 0.5)
+median_of_ratios <- function(counts, idx) {
+  lc  <- log(counts[idx, , drop = FALSE] + 0.5)
   ref <- rowMeans(lc)                                  # per-anchor reference
   sf  <- exp(apply(lc - ref, 2, stats::median))
   sf / exp(mean(log(sf)))
+}
+
+#' CTCF size factors with an iterative *invariance* trim.
+#'
+#' The anchors are constitutive in ENCODE, but a given experiment can still move
+#' a few of them (a CTCF site inside a responsive enhancer, a copy-number
+#' difference, a blacklist-adjacent artifact) and a handful of large movers can
+#' drag a median-of-ratios estimate. So: estimate -> measure how far each anchor
+#' actually shifted between the two conditions -> drop anchors more than
+#' `trim_k` MADs from the median shift -> re-estimate on the survivors.
+#'
+#' Caveat: this is self-referential, so it cannot detect a genuine *uniform*
+#' genome-wide shift (neither can plain median-of-ratios). Only the `spikein`
+#' and `anchor_shape` modes can.
+#'
+#' @return list(sf, idx = surviving anchors, n_start)
+size_factors_ctcf <- function(counts, anchor_idx, condition,
+                              trim_k = 2.5, iter = 2, min_anchors = 200) {
+  idx <- anchor_idx
+  sf  <- median_of_ratios(counts, idx)
+  lv  <- levels(droplevels(condition))
+  if (length(lv) < 2) return(list(sf = sf, idx = idx, n_start = length(anchor_idx)))
+
+  isA <- condition == lv[1]          # reference level (contrast denominator)
+  isB <- condition == lv[2]          # contrast numerator
+  if (!any(isA) || !any(isB))
+    return(list(sf = sf, idx = idx, n_start = length(anchor_idx)))
+
+  for (it in seq_len(max(0L, iter))) {
+    # depth-corrected signal at the current anchors
+    ln    <- sweep(log2(counts[idx, , drop = FALSE] + 0.5), 2, log2(sf), "-")
+    delta <- rowMeans(ln[, isB, drop = FALSE]) - rowMeans(ln[, isA, drop = FALSE])
+    med   <- stats::median(delta)
+    s_mad <- stats::mad(delta)
+    if (!is.finite(s_mad) || s_mad == 0) break
+    keep <- abs(delta - med) <= trim_k * s_mad
+    if (sum(keep) < min_anchors || all(keep)) break     # don't over-trim / nothing to do
+    idx <- idx[keep]
+    sf  <- median_of_ratios(counts, idx)
+  }
+  list(sf = sf, idx = idx, n_start = length(anchor_idx))
 }
 
 # ---- DESeq2 -----------------------------------------------------------------
@@ -170,23 +212,31 @@ main <- function() {
     stop("need >= 2 conditions in samples.csv 'type' column for a differential test")
 
   # ---- size factors for the requested mode ----
+  # if/else rather than switch(): `<<-` inside a switch branch would assign to the
+  # global env, not this frame, silently leaving the counters at NA.
   n_anchors <- NA_integer_
-  sf <- switch(mode,
-    none = NULL,
-    spikein = {
-      spike <- read_spikein_reads(a$spikein)
-      stopifnot(all(samp %in% names(spike)))
-      size_factors_spikein(spike[samp])
-    },
-    ctcf = {
-      idx <- which(ctcf_overlap(fc$coords, a$ctcf))
-      n_anchors <<- length(idx)
-      message(sprintf("CTCF-overlapping consensus peaks: %d / %d", length(idx), nrow(counts)))
-      if (length(idx) < as.integer(a$`min-anchors`))
-        stop(sprintf("only %d CTCF anchors (< %s); refusing to normalize on so few",
-                     length(idx), a$`min-anchors`))
-      size_factors_ctcf(counts, idx)
-    })
+  n_kept    <- NA_integer_
+  if (mode == "none") {
+    sf <- NULL
+  } else if (mode == "spikein") {
+    spike <- read_spikein_reads(a$spikein)
+    stopifnot(all(samp %in% names(spike)))
+    sf <- size_factors_spikein(spike[samp])
+  } else {                                            # ctcf
+    idx <- which(ctcf_overlap(fc$coords, a$ctcf))
+    n_anchors <- length(idx)
+    message(sprintf("CTCF-overlapping consensus peaks: %d / %d", n_anchors, nrow(counts)))
+    if (n_anchors < as.integer(a$`min-anchors`))
+      stop(sprintf("only %d CTCF anchors (< %s); refusing to normalize on so few",
+                   n_anchors, a$`min-anchors`))
+    fit <- size_factors_ctcf(counts, idx, des$condition,
+                             trim_k      = as.numeric(a$`trim-k`),
+                             iter        = as.integer(a$`trim-iter`),
+                             min_anchors = as.integer(a$`min-anchors`))
+    sf     <- fit$sf
+    n_kept <- length(fit$idx)
+    message(sprintf("anchors kept after invariance trim: %d / %d", n_kept, n_anchors))
+  }
 
   out <- run_deseq2(counts, fc$coords, des$condition, des$pair, sf)
   res <- out$table
@@ -216,7 +266,9 @@ main <- function() {
     sprintf("normalization mode        : %s", mode),
     sprintf("contrast                  : %s", out$contrast),
     sprintf("consensus peaks           : %d", nrow(counts)),
-    if (mode == "ctcf") sprintf("CTCF anchors used         : %d", n_anchors) else NULL,
+    if (mode == "ctcf")
+      sprintf("CTCF anchors              : %d overlapping -> %d kept after invariance trim (%.1f%% dropped)",
+              n_anchors, n_kept, 100 * (1 - n_kept / n_anchors)) else NULL,
     sprintf("size-factor spread (max/min): %.2fx", spread),
     sprintf("median |log2FC|           : %.4f", stats::median(abs(res$log2FoldChange), na.rm = TRUE)),
     sprintf("median log2FC (global tilt): %.4f", stats::median(res$log2FoldChange, na.rm = TRUE)),

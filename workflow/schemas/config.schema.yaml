@@ -173,6 +173,21 @@ properties:
       Reference level of the sample sheet's `type` column (the denominator of the
       contrast), e.g. "Control" for a NICD3-vs-Control comparison.
     default: Control
+  ctcf_trim_k:
+    type: number
+    minimum: 0
+    description: >-
+      `ctcf` mode: MAD multiplier for the invariance trim — anchors whose
+      between-condition shift is more than this many MADs from the median shift
+      are dropped before re-estimating size factors. Large values disable it.
+    default: 2.5
+  ctcf_trim_iter:
+    type: integer
+    minimum: 0
+    description: >-
+      `ctcf` mode: number of trim / re-estimate iterations (0 = no trimming).
+    default: 2
+
   anchor_shape_span:
     type: number
     minimum: 0

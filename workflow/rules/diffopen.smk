@@ -29,6 +29,8 @@ rule diffopen:
     params:
         outdir    = lambda w: f"{DIFFOPEN_DIR}/{w.mode}",
         ref_label = config.get("diffopen_ref_label", "Control"),
+        trim_k    = config.get("ctcf_trim_k", 2.5),
+        trim_iter = config.get("ctcf_trim_iter", 2),
         # mode-specific flag, built from whichever extra input was supplied
         extra     = lambda w, input: (
             f"--spikein {input.spikein}" if w.mode == "spikein"
@@ -48,6 +50,7 @@ rule diffopen:
             --samples {input.samples} \
             --outdir {params.outdir} \
             --ref-label '{params.ref_label}' \
+            --trim-k {params.trim_k} --trim-iter {params.trim_iter} \
             {params.extra} > {log} 2>&1
         """
 
