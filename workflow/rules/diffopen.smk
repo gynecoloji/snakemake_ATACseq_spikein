@@ -98,9 +98,13 @@ rule diffopen_anchor_shape:
         """
 
 
-# Aggregate target: run every configured normalization mode so they can be
-# compared side by side (see each mode's run_summary.txt).
+# Aggregate target: run every normalization -- the three selectable modes AND the
+# anchor+shape hybrid -- so all four can be compared side by side (see each
+# mode's run_summary.txt). Note the hybrid's table carries an extra
+# `excess_over_global` column and no `stat`, so the schemas are not identical.
 rule diffopen_all:
     input:
         expand(f"{DIFFOPEN_DIR}/{{mode}}/differential_openness.tsv", mode=DIFFOPEN_MODES),
         expand(f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt", mode=DIFFOPEN_MODES),
+        rules.diffopen_anchor_shape.output.table,
+        rules.diffopen_anchor_shape.output.summary,

@@ -414,10 +414,10 @@ It is **not** part of the default target (it needs ≥2 conditions in
 `config/samples.csv`); request it explicitly:
 
 ```bash
-# all configured modes (none + spikein + ctcf), one directory each
+# all four normalizations, one directory each under results/diffopen/
 snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_all
 
-# hybrid "anchor + shape" (Method 6)
+# or just the hybrid on its own
 snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_anchor_shape
 ```
 
