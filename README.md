@@ -53,7 +53,7 @@ This pipeline integrates three complementary components for complete ATAC-seq an
 2. **ATAC-seq QC stage** (`qc_all` target) - deepTools QC, FRiP, IDR, library complexity, spike-in QC, TSS enrichment score, a self-contained **interactive HTML QC report** (all QC except FastQC), plus a FastQC-only MultiQC
 
 Both stages live in a single standard-layout `workflow/Snakefile`: one `snakemake --use-conda` run builds the primary stage **and** the QC report in dependency order (unified DAG). Run a subset with the `atacseq_all` or `qc_all` targets. The layout follows the [Snakemake Workflow Catalog](https://snakemake.github.io/snakemake-workflow-catalog/) conventions, so the workflow can be deployed into another project with `snakedeploy deploy-workflow` (see [Deploying with snakedeploy](#deploying-with-snakedeploy)).
-3. **Differential Analysis Notebook** (`ATACseq_Dx.ipynb`, R / Bioconductor) - **DESeq2** differential binding (NICD3 vs Ctrl) on the consensus count matrix — split into **promoter vs distal** peaks with a **paired** design and run under **both spike-in and default (median-of-ratios) normalization** for comparison — plus **Gviz genome-browser tracks** at Notch target loci as a positive control; runs on the `atacseq-diffbind` container
+3. **Differential openness stage** (`diffopen_all` target, R / DESeq2) - differential accessibility over the consensus count matrix under **four selectable normalizations** (none / spike-in / constitutive-CTCF / anchor+shape hybrid), so you can see how much the answer depends on the normalization choice
 
 ## Workflow Diagram
 
@@ -125,29 +125,12 @@ Raw FASTQ → FastQC → fastp
 - **Interactive HTML QC report** (`atacseq_qc_report.html`) - one self-contained, theme-aware page for all QC **except FastQC** (alignment rate, mito %, duplication, blacklist, spike-in %/norm factors, peaks/FRiP, TSS enrichment, NRF/PBC1/PBC2, fragment size/GC/correlation/PCA/fingerprint, reads-in-annotation, consensus), with ENCODE-threshold pass/warn/fail flags; numeric metrics render as interactive tables/bar charts and the deepTools QC (fragment size, GC bias, correlation/PCA, fingerprint, TSS profile + per-region heatmap) renders as **interactive SVG/canvas charts drawn client-side** — nothing is embedded as a static image. Mitochondrial % comes from the primary pipeline's `idxstats`
 - **FastQC MultiQC report** (`multiqc_fastqc.html`) - MultiQC scoped to FastQC (raw-read quality) only
 
-### 3. Differential Binding Analysis (`ATACseq_Dx.ipynb`)
+### 3. Differential Openness (`diffopen_all` target)
 
-An **R / Bioconductor** notebook (runs on the `atacseq-diffbind` container, `ir` kernel) that
-takes the pipeline's consensus fragment matrix (`results/consensus/consensus_counts.txt`) and
-performs the differential test end-to-end:
-
-**Differential binding (DESeq2):**
-- **NICD3 vs Ctrl** on the consensus peaks, split into **promoter vs distal** sets (overlap with
-  `ref/promoter_chr1-22X.bed`) and tested separately
-- **Paired design** `~ pair + condition` — each replicate index blocks pair-to-pair variation
-- Run under **two normalizations, compared side by side**: the pipeline's **spike-in** scale
-  factors (`sizeFactor = 1/NF`, centered) and DESeq2's **default** median-of-ratios (`sf = NULL`)
-- Per group × normalization: full results + significant subset (`padj < 0.05 & |log2FC| > 1`),
-  MA/volcano plots, sample **PCA** (spike-in-normalized VST), and ChIPseeker nearest-gene
-  annotation → `results/diff_region/`
-
-**Positive-control genome-browser tracks (Gviz):**
-- Signal at canonical Notch/NICD targets (HES1, HEY1, HEYL, NRARP, DTX1) across all samples, from
-  **both** the spike-in-scaled and RPGC bigWigs (**two figures per gene**), with all-transcript
-  gene models from the GTF → `results/browser_tracks/` (PNG + PDF)
-
-The executed notebook is generated from `workflow/scripts/build_diffbind_notebook.py`
-(helpers in `workflow/scripts/diffbind_helpers.R`).
+DESeq2 differential accessibility over the consensus matrix, with the normalization
+as an explicit, swappable choice — see
+[Differential Openness](#differential-openness-opt-in-r--deseq2) for the four modes
+and how to compare them.
 
 ## Requirements
 
@@ -171,15 +154,11 @@ The pipeline requires the following dependencies:
 - **IDR** (reproducibility analysis)
 - **featureCounts / Subread** (fragment quantification over the consensus set)
 
-### Differential-analysis environment (R / Bioconductor)
-`ATACseq_Dx.ipynb` is an **R** notebook (`ir` kernel), not Python. Run it on the
-**`atacseq-diffbind`** container, which bundles R 4.6 / Bioconductor with everything it needs:
-- **DESeq2**, **apeglm** — differential binding + log2FC shrinkage
-- **GenomicRanges** / **IRanges**, **rtracklayer** — region handling, bigWig I/O
-- **ChIPseeker**, **TxDb.Hsapiens.UCSC.hg38.knownGene**, **org.Hs.eg.db** — annotation
-- **Gviz** — genome-browser tracks; **ggplot2** — MA / volcano / PCA
-
-(edgeR / limma / DiffBind are also installed for alternative differential frameworks.)
+### Differential-openness environment (R / Bioconductor)
+The `diffopen_*` rules run in `workflow/envs/r-diffopen.yaml`, created automatically
+by `--use-conda` and pre-built into the container:
+- **DESeq2**, **apeglm** — differential testing + log2FC shrinkage
+- **GenomicRanges** / **IRanges** — constitutive-CTCF anchor overlap
 
 ### Reference Files (`ref/`)
 
@@ -213,10 +192,10 @@ ref/
 │
 │  ── shipped scripts ──
 ├── build_promoter_beds.py               # regenerates the promoter TSS BEDs (4 definitions)
-├── build_diffbind_notebook.py           # regenerates ATACseq_Dx.ipynb
+├── build_constitutive_ctcf.py           # regenerates the constitutive-CTCF anchor BED
 ├── build_qc_report.py  tss_score.py  consensus_peaks.py  process_sam.py
 ├── compute_spikein_factors.py  blacklist-stats-script.py  downsample_tss_matrix.py
-└── diffbind_helpers.R                   # R helpers for the differential-binding notebook
+└── diffopen.R  spikein_anchor_shape.R   # differential openness (4 normalizations)
 ```
 
 ### Reference files: download & generate
@@ -455,26 +434,6 @@ python workflow/scripts/build_constitutive_ctcf.py --min-frac 0.95   # cached EN
 > retained only for reference. As independent validation, the constitutive set
 > recovers **97.2%** of the anchors from an unrelated occupancy-grading analysis.
 
-### Differential Analysis (notebook)
-`ATACseq_Dx.ipynb` is an **R** notebook (`ir` kernel); run it in the **`atacseq-diffbind`**
-environment. Interactively:
-```bash
-jupyter notebook ATACseq_Dx.ipynb
-```
-Or execute it headless (writes `results/diff_region/` + `results/browser_tracks/`):
-```bash
-jupyter nbconvert --to notebook --execute --inplace \
-    --ExecutePreprocessor.kernel_name=ir ATACseq_Dx.ipynb
-```
-No local R/Bioconductor install? Run it in the **`atacseq-diffbind`** container (pull it
-from [Container Execution](#container-execution-docker--apptainer)); Apptainer auto-mounts
-the current directory:
-```bash
-apptainer exec atacseq-diffbind.sif \
-    jupyter nbconvert --to notebook --execute --inplace \
-    --ExecutePreprocessor.kernel_name=ir ATACseq_Dx.ipynb
-```
-
 ### Cluster Execution
 
 For execution on a SLURM cluster: (Not tested)
@@ -486,13 +445,12 @@ snakemake -s workflow/Snakefile --use-conda \
 
 ### Container Execution (Docker / Apptainer)
 
-Two prebuilt images cover the whole workflow — you install nothing except Docker or
+One prebuilt image covers the whole workflow — you install nothing except Docker or
 Apptainer:
 
 | Image | Contents | Used for |
 |---|---|---|
-| **`gynecoloji/atacseq-spikein`** | Snakemake + all five per-rule conda envs | primary pipeline + QC pipeline |
-| **`gynecoloji/atacseq-diffbind`** | R / Bioconductor (DESeq2, ChIPseeker, Gviz) + `ir` Jupyter kernel | `ATACseq_Dx.ipynb` differential analysis |
+| **`gynecoloji/atacseq-spikein`** | Snakemake + all six per-rule conda envs (incl. `r-diffopen`) | primary pipeline, QC, and differential openness |
 
 **Download** — pull with Docker, or convert to a local `.sif` once for Apptainer /
 Singularity (HPC):
@@ -500,17 +458,15 @@ Singularity (HPC):
 ```bash
 # Docker
 docker pull gynecoloji/atacseq-spikein:latest
-docker pull gynecoloji/atacseq-diffbind:latest
 
-# Apptainer / Singularity  (writes ./atacseq-*.sif in the current directory)
-apptainer pull atacseq-spikein.sif  docker://gynecoloji/atacseq-spikein:latest
-apptainer pull atacseq-diffbind.sif docker://gynecoloji/atacseq-diffbind:latest
+# Apptainer / Singularity  (writes ./atacseq-spikein.sif in the current directory)
+apptainer pull atacseq-spikein.sif docker://gynecoloji/atacseq-spikein:latest
 ```
 
-Genomes/FASTQs are **not** baked into the images; you mount your project directory at run
+Genomes/FASTQs are **not** baked into the image; you mount your project directory at run
 time (see [`DOCKER.md`](DOCKER.md) for the exact `ref/` and `data/` files the container
-expects). A single run builds the primary stage then QC (unified DAG); the differential
-notebook runs in the diffbind image (see [Differential Analysis](#differential-analysis)).
+expects). A single run builds the primary stage then QC (unified DAG); the
+`diffopen_*` targets run in the same image.
 
 The image's entrypoint is
 `snakemake --use-conda --conda-frontend mamba --conda-prefix /opt/wf-conda`, so anything
@@ -671,14 +627,11 @@ data (see [Configuration](#configuration)) and run with `snakemake --use-conda`.
 - **Interactive QC report** - `atacseq_qc_report.html` (self-contained; all QC except FastQC) plus `multiqc_fastqc.html` (FastQC only)
   (mitochondrial % comes from the primary pipeline's `idxstats`)
 
-### 7. Differential Binding Analysis (`ATACseq_Dx.ipynb`)
+### 7. Differential Openness (`diffopen_all` target)
 
-An R / Bioconductor notebook (details in [Component 3](#3-differential-binding-analysis-atacseq_dxipynb)):
-- **DESeq2** differential binding **NICD3 vs Ctrl** on the consensus matrix — **promoter vs distal**,
-  **paired** design, under **spike-in and default (median-of-ratios) normalization** (compared)
-- Sample **PCA**, MA/volcano plots, ChIPseeker nearest-gene annotation → `results/diff_region/`
-- **Gviz** genome-browser tracks at Notch target loci (spike-in + RPGC, two figures per gene) →
-  `results/browser_tracks/`
+DESeq2 over the consensus matrix under four selectable normalizations — see
+[Differential Openness](#differential-openness-opt-in-r--deseq2). Outputs per mode →
+`results/diffopen/<mode>/`.
 
 ## Output Files
 
@@ -717,9 +670,9 @@ results/
 │   ├── multiqc_fastqc.html         # FastQC-only MultiQC
 │   ├── tss_enrichment_scores.tsv, peak_summary.tsv
 │   └── blacklist_filtering_stats.txt
-# ── Differential-analysis notebook (ATACseq_Dx.ipynb) outputs ──
-├── diff_region/            # DESeq2 DB (promoter/distal · spike-in & default), PCA, MA/volcano, annotation
-└── browser_tracks/         # Gviz tracks at Notch loci (spike-in + RPGC, PNG + PDF)
+# ── Differential openness (opt-in: `snakemake diffopen_all`) ──
+└── diffopen/               # one dir per normalization: none, spikein, ctcf, anchor_shape
+    └── <mode>/             # differential_openness.tsv, size_factors.tsv, run_summary.txt, MA_plot.png
 ```
 
 ### Directory Structure

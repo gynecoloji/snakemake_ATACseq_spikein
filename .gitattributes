@@ -1,7 +1,6 @@
 # ── Language statistics ─────────────────────────────────────────────────
 # Keep the large executed notebook, generated artifacts, and reference BEDs out
 # of GitHub's language bar so the repo reads as Snakemake/Python (not Jupyter).
-ATACseq_Dx.ipynb        linguist-documentation
 images/rulegraph.svg    linguist-generated
 ref/*.bed               linguist-generated
 ref/*.tsv               linguist-generated
