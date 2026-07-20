@@ -27,7 +27,16 @@ suppressPackageStartupMessages({
 
 pa <- function(args) {
   o <- list(models = "")
-  i <- 1; while (i <= length(args)) { o[[sub("^--", "", args[i])]] <- args[i + 1]; i <- i + 2 }
+  i <- 1
+  while (i <= length(args)) {
+    key <- sub("^--", "", args[i])
+    nxt <- if (i < length(args)) args[i + 1] else NA_character_
+    # valueless flag (e.g. --models-only): the next token is another flag, or
+    # there is none. Advancing by 2 here would swallow it and desynchronize
+    # every argument that follows.
+    if (is.na(nxt) || grepl("^--", nxt)) { o[[key]] <- TRUE; i <- i + 1 }
+    else                                 { o[[key]] <- nxt;  i <- i + 2 }
+  }
   o
 }
 

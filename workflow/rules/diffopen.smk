@@ -18,7 +18,9 @@ rule diffopen:
     wildcard_constraints:
         mode = "none|spikein|ctcf"
     input:
-        unpack(_diffopen_extra_input),
+        unpack(_diffopen_extra_input),        # positional: must precede keywords
+        # declared so edits to the script invalidate its outputs
+        script   = "workflow/scripts/diffopen.R",
         counts   = f"{CONSENSUS_DIR}/consensus_counts.txt",
         samples  = config["samples_table"],
         promoter = config["promoter_bed"],
@@ -73,6 +75,8 @@ rule diffopen:
 # trimmed), combined into per-region DESeq2 normalizationFactors.
 rule diffopen_anchor_shape:
     input:
+        # declared so edits to the script invalidate its outputs
+        script  = "workflow/scripts/spikein_anchor_shape.R",
         counts  = f"{CONSENSUS_DIR}/consensus_counts.txt",
         spikein = f"{SPIKEIN_DIR}/normalization_factors.tsv",
         samples = config["samples_table"],
@@ -134,6 +138,8 @@ rule diffopen_anchor_shape:
 # would race to write the same file.
 rule diffopen_gene_models:
     input:
+        # declared so edits to the script invalidate its outputs
+        script  = "workflow/scripts/diffopen_annotate.R",
         gtf = config["gtf"],
     output:
         models = f"{DIFFOPEN_DIR}/gene_models.rds",
@@ -151,6 +157,8 @@ rule diffopen_gene_models:
 
 rule diffopen_annotate:
     input:
+        # declared so edits to the script invalidate its outputs
+        script  = "workflow/scripts/diffopen_annotate.R",
         promoter = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter.tsv",
         enhancer = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer.tsv",
         gtf      = config["gtf"],
@@ -180,6 +188,8 @@ rule diffopen_annotate:
 # from any tested peak, NOT the whole genome (which would inflate significance).
 rule diffopen_enrich:
     input:
+        # declared so edits to the script invalidate its outputs
+        script  = "workflow/scripts/diffopen_enrich.R",
         universe = f"{DIFFOPEN_DIR}/{{mode}}/genes/universe_genes.txt",
     output:
         summary = f"{DIFFOPEN_DIR}/{{mode}}/enrichment/enrichment_summary.tsv",
@@ -205,6 +215,8 @@ rule diffopen_enrich:
 # (PNG + PDF). Same >min-genes gate as the enrichment.
 rule diffopen_tracks:
     input:
+        # declared so edits to the script invalidate its outputs
+        script  = "workflow/scripts/diffopen_tracks.R",
         summary = f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
         models  = f"{DIFFOPEN_DIR}/gene_models.rds",
         bigwigs = expand(f"{BIGWIG_DIR}/{{sample}}.bw", sample=SAMPLES),
@@ -237,6 +249,8 @@ rule diffopen_tracks:
 # needs no external assets and opens anywhere.
 rule diffopen_report:
     input:
+        # declared so edits to the script invalidate its outputs
+        script  = "workflow/scripts/build_diffopen_report.py",
         summaries = expand(f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt", mode=DIFFOPEN_MODES),
         hybrid    = f"{DIFFOPEN_DIR}/anchor_shape/run_summary.txt",
     output:
