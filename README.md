@@ -435,10 +435,25 @@ condition means that normalization is confounded. (In our GSF4007 data the
 spike-in factors spanned 5× and separated by condition, which is why the
 spike-in-free `ctcf` mode exists.)
 
-Reference: `ctcf_bed` defaults to `ref/GRCh38-cCREs.CTCF-only.bed` (ENCODE SCREEN
-"CTCF-only" cCREs). Note that this SCREEN set is only partly cell-type-invariant;
-the `anchor_shape` mode mitigates that by trimming anchors that move between
-conditions.
+**Anchor set.** `ctcf_bed` defaults to `ref/constitutive_ctcf_hg38.bed` — 18,108
+CTCF regions that are genuinely constitutive, built by
+[`build_constitutive_ctcf.py`](workflow/scripts/build_constitutive_ctcf.py) as the
+union of ENCODE CTCF ChIP-seq peaks across **59 diverse cell types** (cell lines,
+tissues, primary cells, organoids), keeping only regions bound in **≥90%** of them.
+It is genome coordinates only, so it is reusable for **any human sample**. The
+companion `ref/ctcf_occupancy_hg38.tsv` lets you re-threshold (95%/80%) without
+re-downloading anything:
+
+```bash
+python workflow/scripts/build_constitutive_ctcf.py --min-frac 0.95   # cached ENCODE files reused
+```
+
+> ⚠️ Do **not** point `ctcf_bed` at `ref/GRCh38-cCREs.CTCF-only.bed`. That file is
+> SCREEN's `CA-CTCF` class, which by definition excludes CTCF sites at promoters
+> and enhancers — real CTCF ChIP peaks sit a median **12.8 kb** from the nearest
+> one, and 82% of those cCREs show no CTCF binding across 60 cell types. It is
+> retained only for reference. As independent validation, the constitutive set
+> recovers **97.2%** of the anchors from an unrelated occupancy-grading analysis.
 
 ### Differential Analysis (notebook)
 `ATACseq_Dx.ipynb` is an **R** notebook (`ir` kernel); run it in the **`atacseq-diffbind`**

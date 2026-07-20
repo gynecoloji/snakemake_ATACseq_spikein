@@ -60,7 +60,7 @@ rule diffopen_anchor_shape:
         counts  = f"{CONSENSUS_DIR}/consensus_counts.txt",
         spikein = f"{SPIKEIN_DIR}/normalization_factors.tsv",
         samples = config["samples_table"],
-        ctcf    = config.get("ctcf_bed", "ref/GRCh38-cCREs.CTCF-only.bed"),
+        ctcf    = config.get("ctcf_bed", "ref/constitutive_ctcf_hg38.bed"),
     output:
         table   = f"{DIFFOPEN_DIR}/anchor_shape/differential_openness.tsv",
         anchors = f"{DIFFOPEN_DIR}/anchor_shape/invariant_ctcf_anchors.txt",

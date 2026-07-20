@@ -56,9 +56,14 @@ spikein_pct_min: 2                              # Active Motif spike-in target l
 spikein_pct_max: 10                             # upper bound (%)
 
 # ── Differential openness (opt-in: `snakemake diffopen_all`) ────────────
-# Constitutive-CTCF anchor set (ENCODE SCREEN "CTCF-only" cCREs) used by the
-# `ctcf` normalization mode and by the anchor+shape hybrid.
-ctcf_bed: "ref/GRCh38-cCREs.CTCF-only.bed"
+# Constitutive-CTCF anchor set used by the `ctcf` normalization mode and by the
+# anchor+shape hybrid. Built by workflow/scripts/build_constitutive_ctcf.py as
+# the union of ENCODE CTCF ChIP-seq peaks across 59 diverse cell types, keeping
+# regions bound in >=90% of them (18,108 regions, hg38; portable to any human
+# sample). NOTE: do NOT point this at ref/GRCh38-cCREs.CTCF-only.bed — that is
+# SCREEN's CA-CTCF class, which excludes CTCF sites at promoters/enhancers and
+# is a poor normalization anchor (real CTCF peaks sit a median 12.8 kb away).
+ctcf_bed: "ref/constitutive_ctcf_hg38.bed"
 # Which normalizations to run for `diffopen_all`. Each writes its own directory
 # under results/diffopen/ so the modes can be compared:
 #   none    - DESeq2 median-of-ratios over all peaks (baseline)

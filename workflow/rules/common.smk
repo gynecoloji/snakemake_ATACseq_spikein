@@ -121,5 +121,5 @@ def _diffopen_extra_input(wildcards):
     if wildcards.mode == "spikein":
         return {"spikein": f"{SPIKEIN_DIR}/normalization_factors.tsv"}
     if wildcards.mode == "ctcf":
-        return {"ctcf": config.get("ctcf_bed", "ref/GRCh38-cCREs.CTCF-only.bed")}
+        return {"ctcf": config.get("ctcf_bed", "ref/constitutive_ctcf_hg38.bed")}
     return {}
