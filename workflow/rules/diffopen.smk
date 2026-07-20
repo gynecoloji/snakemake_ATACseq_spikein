@@ -19,13 +19,17 @@ rule diffopen:
         mode = "none|spikein|ctcf"
     input:
         unpack(_diffopen_extra_input),
-        counts  = f"{CONSENSUS_DIR}/consensus_counts.txt",
-        samples = config["samples_table"],
+        counts   = f"{CONSENSUS_DIR}/consensus_counts.txt",
+        samples  = config["samples_table"],
+        promoter = config["promoter_bed"],
+        enhancer = config["enhancer_bed"],
     output:
-        table   = f"{DIFFOPEN_DIR}/{{mode}}/differential_openness.tsv",
-        factors = f"{DIFFOPEN_DIR}/{{mode}}/size_factors.tsv",
-        summary = f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt",
-        ma      = f"{DIFFOPEN_DIR}/{{mode}}/MA_plot.png",
+        table    = f"{DIFFOPEN_DIR}/{{mode}}/differential_openness.tsv",
+        promoter = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter.tsv",
+        enhancer = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer.tsv",
+        factors  = f"{DIFFOPEN_DIR}/{{mode}}/size_factors.tsv",
+        summary  = f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt",
+        ma       = f"{DIFFOPEN_DIR}/{{mode}}/MA_plot.png",
     params:
         outdir    = lambda w: f"{DIFFOPEN_DIR}/{w.mode}",
         ref_label = config.get("diffopen_ref_label", "Control"),
@@ -51,6 +55,7 @@ rule diffopen:
             --outdir {params.outdir} \
             --ref-label '{params.ref_label}' \
             --trim-k {params.trim_k} --trim-iter {params.trim_iter} \
+            --promoter-bed {input.promoter} --enhancer-bed {input.enhancer} \
             {params.extra} > {log} 2>&1
         """
 

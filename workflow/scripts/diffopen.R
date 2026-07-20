@@ -42,7 +42,7 @@ suppressPackageStartupMessages({
 # ---- tiny --key value arg parser -------------------------------------------
 parse_args <- function(args) {
   out <- list(mode = "none", `ref-label` = "Control", `min-anchors` = "200",
-              `trim-k` = "2.5", `trim-iter` = "2")
+              `trim-k` = "2.5", `trim-iter` = "2", `min-class-peaks` = "100")
   i <- 1
   while (i <= length(args)) {
     key <- sub("^--", "", args[i]); out[[key]] <- args[i + 1]; i <- i + 2
@@ -80,15 +80,30 @@ read_design <- function(path, ref_label) {
              stringsAsFactors = FALSE)
 }
 
-#' Logical over consensus peaks: TRUE where the peak overlaps a CTCF cCRE.
-ctcf_overlap <- function(coords, ctcf_path) {
+#' Logical over consensus peaks: TRUE where the peak overlaps any feature in a BED.
+bed_overlap <- function(coords, bed_path) {
   suppressPackageStartupMessages({
     library(GenomicRanges); library(IRanges)
   })
-  cc <- read.delim(ctcf_path, header = FALSE, stringsAsFactors = FALSE)
-  ctcf  <- GRanges(cc[[1]], IRanges(cc[[2]] + 1L, cc[[3]]))        # BED 0-based -> 1-based
+  b <- read.delim(bed_path, header = FALSE, stringsAsFactors = FALSE)
+  feat  <- GRanges(b[[1]], IRanges(b[[2]] + 1L, b[[3]]))           # BED 0-based -> 1-based
   peaks <- GRanges(coords$Chr, IRanges(coords$Start, coords$End))
-  overlapsAny(peaks, ctcf)
+  overlapsAny(peaks, feat)
+}
+
+#' Backwards-compatible alias used by the CTCF size-factor path.
+ctcf_overlap <- function(coords, ctcf_path) bed_overlap(coords, ctcf_path)
+
+#' Classify each consensus peak as promoter / enhancer / other.
+#'
+#' PROMOTER PRECEDENCE: a peak overlapping both a promoter and an enhancer
+#' feature is called a promoter. Without this, peaks straddling an adjacent
+#' promoter+enhancer pair would be double-counted across the two classes.
+classify_peaks <- function(coords, promoter_bed, enhancer_bed) {
+  prom <- bed_overlap(coords, promoter_bed)
+  enh  <- bed_overlap(coords, enhancer_bed) & !prom
+  factor(ifelse(prom, "promoter", ifelse(enh, "enhancer", "other")),
+         levels = c("promoter", "enhancer", "other"))
 }
 
 # ---- size factors, one function per mode ------------------------------------
@@ -153,20 +168,36 @@ size_factors_ctcf <- function(counts, anchor_idx, condition,
 
 # ---- DESeq2 -----------------------------------------------------------------
 
-run_deseq2 <- function(counts, coords, condition, pair, size_factors) {
+#' DESeq2 size factors as DESeq2 itself would estimate them (mode=none), computed
+#' ONCE on the full matrix so every peak class shares them.
+size_factors_deseq2 <- function(counts, condition) {
+  cd  <- data.frame(condition = condition, row.names = colnames(counts))
+  dds <- DESeq2::DESeqDataSetFromMatrix(counts, cd, ~condition)
+  DESeq2::sizeFactors(DESeq2::estimateSizeFactors(dds))
+}
+
+#' Fit one peak class with the GLOBAL size factors injected (never re-estimated:
+#' size factors are a library-level property, so promoter/enhancer/all must share
+#' them). Each class still gets its own dispersion trend and its own within-class
+#' FDR, which is the point of splitting.
+#'
+#' @param idx row indices of the class (NULL = all peaks)
+fit_class <- function(counts, coords, condition, pair, size_factors, idx = NULL,
+                      label = "all") {
+  if (!is.null(idx)) {
+    counts <- counts[idx, , drop = FALSE]
+    coords <- coords[idx, , drop = FALSE]
+  }
   coldata <- data.frame(condition = condition, pair = pair, row.names = colnames(counts))
   # Use the paired design only when every pair is seen exactly once per condition.
   paired <- nlevels(droplevels(pair)) > 1 &&
             all(table(coldata$pair, coldata$condition) == 1)
   design <- if (paired) ~pair + condition else ~condition
-  message("design: ", deparse(design), if (paired) "  (paired)" else "  (unpaired)")
+  message(sprintf("[%s] %d peaks | design %s%s", label, nrow(counts),
+                  deparse(design), if (paired) " (paired)" else " (unpaired)"))
 
   dds <- DESeq2::DESeqDataSetFromMatrix(counts, coldata, design)
-  if (is.null(size_factors)) {
-    dds <- DESeq2::estimateSizeFactors(dds)            # mode=none: DESeq2 default
-  } else {
-    DESeq2::sizeFactors(dds) <- size_factors           # mode=spikein / ctcf
-  }
+  DESeq2::sizeFactors(dds) <- size_factors
   dds <- DESeq2::estimateDispersions(dds)
   dds <- DESeq2::nbinomWaldTest(dds)
 
@@ -184,7 +215,11 @@ run_deseq2 <- function(counts, coords, condition, pair, size_factors) {
                        padj           = res$padj,
                        row.names = NULL, check.names = FALSE),
     contrast = cf,
-    sf = DESeq2::sizeFactors(dds)
+    n        = nrow(counts),
+    n_sig    = sum(res$padj < 0.05, na.rm = TRUE),
+    n_nom    = sum(res$pvalue < 0.05, na.rm = TRUE),
+    med_lfc  = stats::median(shr$log2FoldChange, na.rm = TRUE),
+    up_frac  = mean(shr$log2FoldChange[which(res$pvalue < 0.05)] > 0, na.rm = TRUE)
   )
 }
 
@@ -217,7 +252,8 @@ main <- function() {
   n_anchors <- NA_integer_
   n_kept    <- NA_integer_
   if (mode == "none") {
-    sf <- NULL
+    # Estimated once on the FULL matrix, then shared by every peak class.
+    sf <- size_factors_deseq2(counts, des$condition)
   } else if (mode == "spikein") {
     spike <- read_spikein_reads(a$spikein)
     stopifnot(all(samp %in% names(spike)))
@@ -238,13 +274,37 @@ main <- function() {
     message(sprintf("anchors kept after invariance trim: %d / %d", n_kept, n_anchors))
   }
 
-  out <- run_deseq2(counts, fc$coords, des$condition, des$pair, sf)
-  res <- out$table
+  # ---- fit: pooled first, then promoter / enhancer separately ----
+  # Each class is fit on its own so it gets its own dispersion trend and its own
+  # within-class FDR; the size factors above are shared, never re-estimated.
+  fits <- list(all = fit_class(counts, fc$coords, des$condition, des$pair, sf,
+                               NULL, "all"))
+  res  <- fits$all$table
+
+  cls <- NULL
+  if (!is.null(a$`promoter-bed`) && !is.null(a$`enhancer-bed`)) {
+    cls <- classify_peaks(fc$coords, a$`promoter-bed`, a$`enhancer-bed`)
+    message("peak classes: ",
+            paste(sprintf("%s=%d", levels(cls), as.integer(table(cls))), collapse = "  "))
+    for (k in c("promoter", "enhancer")) {
+      idx <- which(cls == k)
+      if (length(idx) < as.integer(a$`min-class-peaks`)) {
+        message(sprintf("skipping %s: only %d peaks", k, length(idx))); next
+      }
+      fits[[k]] <- fit_class(counts, fc$coords, des$condition, des$pair, sf, idx, k)
+    }
+  }
 
   # ---- outputs ----
   utils::write.table(res, file.path(a$outdir, "differential_openness.tsv"),
                      sep = "\t", quote = FALSE, row.names = FALSE)
-  sft <- data.frame(sample = names(out$sf), size_factor = as.numeric(out$sf),
+  for (k in c("promoter", "enhancer")) {
+    if (!is.null(fits[[k]]))
+      utils::write.table(fits[[k]]$table,
+                         file.path(a$outdir, sprintf("diffopen_%s.tsv", k)),
+                         sep = "\t", quote = FALSE, row.names = FALSE)
+  }
+  sft <- data.frame(sample = names(sf), size_factor = as.numeric(sf),
                     row.names = NULL, check.names = FALSE)
   utils::write.table(sft, file.path(a$outdir, "size_factors.tsv"),
                      sep = "\t", quote = FALSE, row.names = FALSE)
@@ -261,10 +321,29 @@ main <- function() {
   grDevices::dev.off()
 
   # ---- summary (incl. the spike-in trustworthiness diagnostic) ----
-  spread <- max(out$sf) / min(out$sf)
+  spread <- max(sf) / min(sf)
+  class_lines <- character(0)
+  if (!is.null(cls)) {
+    tb <- table(cls)
+    class_lines <- c(
+      "",
+      sprintf("peak classes (promoter precedence): promoter=%d  enhancer=%d  other=%d",
+              tb[["promoter"]], tb[["enhancer"]], tb[["other"]]),
+      "  class                n      padj<0.05   p<0.05   median log2FC   %% up (of p<0.05)")
+    for (k in c("all", "promoter", "enhancer")) {
+      f <- fits[[k]]
+      if (is.null(f)) next
+      class_lines <- c(class_lines,
+        sprintf("  %-10s %8d   %8d %8d %14.4f %14.1f%%",
+                k, f$n, f$n_sig, f$n_nom, f$med_lfc, 100 * f$up_frac))
+    }
+    class_lines <- c(class_lines,
+      "  (each class fit separately -> own dispersion trend and within-class FDR;",
+      "   size factors are shared, computed once on all peaks)")
+  }
   summ <- c(
     sprintf("normalization mode        : %s", mode),
-    sprintf("contrast                  : %s", out$contrast),
+    sprintf("contrast                  : %s", fits$all$contrast),
     sprintf("consensus peaks           : %d", nrow(counts)),
     if (mode == "ctcf")
       sprintf("CTCF anchors              : %d overlapping -> %d kept after invariance trim (%.1f%% dropped)",
@@ -274,6 +353,7 @@ main <- function() {
     sprintf("median log2FC (global tilt): %.4f", stats::median(res$log2FoldChange, na.rm = TRUE)),
     sprintf("differential (padj<0.05)  : %d", sum(res$padj < 0.05, na.rm = TRUE)),
     sprintf("nominal (pvalue<0.05)     : %d", sum(res$pvalue < 0.05, na.rm = TRUE)),
+    class_lines,
     "",
     "Interpretation: a large size-factor spread that tracks condition means the",
     "normalization is confounded -- compare the modes before trusting any one of them.")
