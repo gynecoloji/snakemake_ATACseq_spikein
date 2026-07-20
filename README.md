@@ -67,9 +67,16 @@ The same tube map is rendered automatically on the
 from the executable test case in [`.test/`](.test). Regenerate it with:
 
 ```bash
-snakemake -s workflow/Snakefile -c 1 -d .test --forceall --rulegraph > rulegraph.dot
-snakevision -s all atacseq_all qc_all -o images/rulegraph.svg rulegraph.dot
+# Name the targets BEFORE --rulegraph: the flag takes an optional value and will
+# otherwise swallow the first target name. `diffopen_all` is needed explicitly —
+# the default target excludes the opt-in differential stage, so without it the
+# diffopen rules are missing from the map.
+snakemake -s workflow/Snakefile -c 1 -d .test all diffopen_all --forceall --rulegraph > rulegraph.dot
+snakevision -s all atacseq_all qc_all diffopen_all -o images/rulegraph.svg rulegraph.dot
 ```
+
+(The catalog page renders only the default target, so it shows the primary + QC
+stages; the image above additionally covers the opt-in differential stage.)
 
 ## Features
 
@@ -128,9 +135,10 @@ Raw FASTQ → FastQC → fastp
 ### 3. Differential Openness (`diffopen_all` target)
 
 DESeq2 differential accessibility over the consensus matrix, with the normalization
-as an explicit, swappable choice — see
-[Differential Openness](#differential-openness-opt-in-r--deseq2) for the four modes
-and how to compare them.
+as an explicit, swappable choice, split by promoter/enhancer and carried through to
+gene assignment, GO enrichment, Gviz browser tracks and a self-contained HTML
+report. See [Differential Openness](#differential-openness-opt-in-r--deseq2) for the
+four modes and how to compare them.
 
 ## Requirements
 
@@ -407,12 +415,56 @@ snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_anchor_shape
 | `ctcf` | median-of-ratios restricted to **constitutive CTCF anchors** (`ctcf_bed`), spike-in free | No — CTCF level assumed invariant |
 | `anchor_shape` | hybrid: **level** from the spike-in, intensity-dependent **shape** from CTCF anchors (anchors that move are trimmed) | Yes, with a shape correction |
 
-Each mode writes `differential_openness.tsv`, `size_factors.tsv`, `run_summary.txt`
-and an MA plot to `results/diffopen/<mode>/`. **Compare the `run_summary.txt`
-files before trusting any single mode** — a large size-factor spread that tracks
-condition means that normalization is confounded. (In our GSF4007 data the
-spike-in factors spanned 5× and separated by condition, which is why the
-spike-in-free `ctcf` mode exists.)
+**Compare the `run_summary.txt` files before trusting any single mode** — a large
+size-factor spread that tracks condition means that normalization is confounded.
+(In our GSF4007 data the spike-in factors spanned 5× and separated by condition,
+which is why the spike-in-free `ctcf` mode exists.)
+
+#### Promoter / enhancer split
+
+Every mode — including the hybrid — also fits **promoter** and **enhancer** peaks
+separately, classified by overlap with `promoter_bed` / `enhancer_bed` under
+**promoter precedence** (a peak hitting both counts as promoter, never twice).
+Each class gets its own dispersion trend and its own within-class FDR; the size
+factors (or, for `anchor_shape`, the per-region offset matrix) are **never**
+re-estimated per class — they are a library-level property computed once on all
+peaks. Because the offsets are row-centered, taking one class's rows is exactly
+the normalization the genome-wide fit applied to those same regions.
+
+Alongside each table, pre-filtered `*_nominal_p05.tsv` / `*_nominal_p01.tsv`
+subsets are written. At n=3 DESeq2's per-peak FDR is very conservative, so read
+these sets for their **up/down direction balance**, not their size — the
+`run_summary.txt` table carries a footnote explaining how to read the `% up`
+column and which values indicate a scaling artifact rather than biology.
+
+#### Downstream: genes, enrichment, browser tracks, report
+
+`diffopen_all` continues past the DA tables for every mode:
+
+| stage | rule | output |
+|---|---|---|
+| Gene assignment | `diffopen_annotate` | `<mode>/genes/` — nearest **transcript** TSS (not gene-level 5′ ends, which misassign long genes), reported for any biotype and separately for protein-coding; per class × tier annotation tables, up/down gene lists, and the enrichment universe |
+| GO enrichment | `diffopen_enrich` | `<mode>/enrichment/` — clusterProfiler + `org.Hs.eg.db`, offline (no network call at runtime); `GO_<class>_<tier>_<up\|down>.tsv/.png` plus `enrichment_summary.tsv` |
+| Browser tracks | `diffopen_tracks` | `<mode>/tracks/gviz_<class>_<up\|down>_<GENE>.png/.pdf` — per-sample coverage, GENCODE models, and the differential region highlighted |
+| HTML summary | `diffopen_report` | `results/diffopen/diffopen_report.html` — self-contained (inline SVG, no external assets), comparing all four normalizations side by side with a verdict panel |
+
+Three significance tiers are carried through: `padj05` (padj < 0.05), `p01`
+(p < 0.01) and `p05` (p < 0.05). Enrichment and tracks are **gated** — a set with
+`≤ diffopen_min_genes` genes is skipped, since small sets give unstable,
+uninterpretable enrichment. At small n the `padj05` tier normally falls below the
+gate by design. The universe is the coding genes reachable from any *tested* peak,
+not the whole genome, which would inflate significance.
+
+Relevant config keys:
+
+| key | default | meaning |
+|---|---|---|
+| `diffopen_modes` | `[none, spikein, ctcf]` | which size-factor modes to run (the hybrid always runs) |
+| `diffopen_ref_label` | `Control` | reference level of the `type` column |
+| `diffopen_min_genes` | `10` | gate: skip enrichment/tracks for sets at or below this |
+| `diffopen_go_ont` | `BP` | GO ontology (`BP`/`MF`/`CC`) |
+| `diffopen_track_tier` | `p01` | which tier to draw Gviz tracks for |
+| `diffopen_track_top` | `5` | top N up and N down regions per class |
 
 **Anchor set.** `ctcf_bed` defaults to `ref/constitutive_ctcf_hg38.bed` — 18,108
 CTCF regions that are genuinely constitutive, built by

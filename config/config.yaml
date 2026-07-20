@@ -80,3 +80,8 @@ ctcf_trim_iter: 2                    # trim/re-estimate iterations (0 = no trimm
 anchor_shape_span: 0.6               # loess span for the intensity-dependent shape
 anchor_shape_trim_k: 2.5             # MAD multiplier for trimming CTCF anchors that move
 anchor_shape_iter: 2                 # shape/trim refinement iterations
+# Downstream of the DA tables: gene assignment, GO enrichment, browser tracks
+diffopen_min_genes: 10               # gate: sets with <= this many genes are skipped
+diffopen_go_ont: "BP"                # GO ontology for clusterProfiler (BP/MF/CC)
+diffopen_track_tier: "p01"           # which tier to draw Gviz tracks for
+diffopen_track_top: 5                # top N up and N down regions per class

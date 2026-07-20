@@ -27,6 +27,14 @@ rule diffopen:
         table    = f"{DIFFOPEN_DIR}/{{mode}}/differential_openness.tsv",
         promoter = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter.tsv",
         enhancer = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer.tsv",
+        # pre-filtered nominal-significance subsets (n=3 -> FDR is very
+        # conservative; read the direction balance of these, not their size)
+        all_p05  = f"{DIFFOPEN_DIR}/{{mode}}/differential_openness_nominal_p05.tsv",
+        all_p01  = f"{DIFFOPEN_DIR}/{{mode}}/differential_openness_nominal_p01.tsv",
+        prom_p05 = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter_nominal_p05.tsv",
+        prom_p01 = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter_nominal_p01.tsv",
+        enh_p05  = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer_nominal_p05.tsv",
+        enh_p01  = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer_nominal_p01.tsv",
         factors  = f"{DIFFOPEN_DIR}/{{mode}}/size_factors.tsv",
         summary  = f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt",
         ma       = f"{DIFFOPEN_DIR}/{{mode}}/MA_plot.png",
@@ -69,8 +77,20 @@ rule diffopen_anchor_shape:
         spikein = f"{SPIKEIN_DIR}/normalization_factors.tsv",
         samples = config["samples_table"],
         ctcf    = config.get("ctcf_bed", "ref/constitutive_ctcf_hg38.bed"),
+        promoter_bed = config["promoter_bed"],
+        enhancer_bed = config["enhancer_bed"],
     output:
         table   = f"{DIFFOPEN_DIR}/anchor_shape/differential_openness.tsv",
+        # same promoter/enhancer split as the other modes, so the hybrid feeds
+        # the identical downstream annotate/enrich/tracks rules
+        promoter = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_promoter.tsv",
+        enhancer = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_enhancer.tsv",
+        all_p05  = f"{DIFFOPEN_DIR}/anchor_shape/differential_openness_nominal_p05.tsv",
+        all_p01  = f"{DIFFOPEN_DIR}/anchor_shape/differential_openness_nominal_p01.tsv",
+        prom_p05 = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_promoter_nominal_p05.tsv",
+        prom_p01 = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_promoter_nominal_p01.tsv",
+        enh_p05  = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_enhancer_nominal_p05.tsv",
+        enh_p01  = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_enhancer_nominal_p01.tsv",
         anchors = f"{DIFFOPEN_DIR}/anchor_shape/invariant_ctcf_anchors.txt",
         level   = f"{DIFFOPEN_DIR}/anchor_shape/spikein_level.tsv",
         summary = f"{DIFFOPEN_DIR}/anchor_shape/run_summary.txt",
@@ -96,10 +116,144 @@ rule diffopen_anchor_shape:
             --samples {input.samples} \
             --ctcf {input.ctcf} \
             --outdir {params.outdir} \
+            --promoter-bed {input.promoter_bed} \
+            --enhancer-bed {input.enhancer_bed} \
             --span {params.span} \
             --trim-k {params.trim_k} \
             --iter {params.iter} \
             --ref-label '{params.ref_label}' > {log} 2>&1
+        """
+
+
+# ── Downstream annotation / enrichment / tracks (per normalization mode) ──
+# Nearest TRANSCRIPT TSS (not gene-level 5' ends -- those misassign genes whose
+# span is long, e.g. PGK1 by 193 kb). Also caches the parsed GENCODE models as
+# RDS so the Gviz rule does not re-read a 1.3 GB GTF.
+# Parse the 1.3 GB GENCODE GTF ONCE into a compact RDS shared by every mode.
+# Its own wildcard-free rule: as an output of the per-mode rule, three jobs
+# would race to write the same file.
+rule diffopen_gene_models:
+    input:
+        gtf = config["gtf"],
+    output:
+        models = f"{DIFFOPEN_DIR}/gene_models.rds",
+    conda:
+        "../envs/r-diffopen.yaml"
+    log:
+        "logs/diffopen/gene_models.log",
+    shell:
+        """
+        mkdir -p logs/diffopen
+        Rscript workflow/scripts/diffopen_annotate.R --models-only \
+            --gtf {input.gtf} --models {output.models} > {log} 2>&1
+        """
+
+
+rule diffopen_annotate:
+    input:
+        promoter = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter.tsv",
+        enhancer = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer.tsv",
+        gtf      = config["gtf"],
+        models   = f"{DIFFOPEN_DIR}/gene_models.rds",
+    output:
+        summary  = f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
+        universe = f"{DIFFOPEN_DIR}/{{mode}}/genes/universe_genes.txt",
+    params:
+        indir  = lambda w: f"{DIFFOPEN_DIR}/{w.mode}",
+        outdir = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/genes",
+    conda:
+        "../envs/r-diffopen.yaml"
+    log:
+        "logs/diffopen/annotate_{mode}.log"
+    shell:
+        """
+        mkdir -p logs/diffopen
+        Rscript workflow/scripts/diffopen_annotate.R \
+            --indir {params.indir} --gtf {input.gtf} \
+            --outdir {params.outdir} --models {input.models} > {log} 2>&1
+        """
+
+
+# Offline GO enrichment (clusterProfiler + org.Hs.eg.db -- no network call).
+# Gated: sets with <= diffopen_min_genes genes are skipped, so the padj<0.05
+# tier is normally not tested at small n. Universe = coding genes reachable
+# from any tested peak, NOT the whole genome (which would inflate significance).
+rule diffopen_enrich:
+    input:
+        universe = f"{DIFFOPEN_DIR}/{{mode}}/genes/universe_genes.txt",
+    output:
+        summary = f"{DIFFOPEN_DIR}/{{mode}}/enrichment/enrichment_summary.tsv",
+    params:
+        genedir   = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/genes",
+        outdir    = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/enrichment",
+        min_genes = config.get("diffopen_min_genes", 10),
+        ont       = config.get("diffopen_go_ont", "BP"),
+    conda:
+        "../envs/r-diffopen.yaml"
+    log:
+        "logs/diffopen/enrich_{mode}.log"
+    shell:
+        """
+        mkdir -p logs/diffopen
+        Rscript workflow/scripts/diffopen_enrich.R \
+            --genedir {params.genedir} --outdir {params.outdir} \
+            --min-genes {params.min_genes} --ont {params.ont} > {log} 2>&1
+        """
+
+
+# Gviz browser tracks for the top up/down regions, one figure per gene
+# (PNG + PDF). Same >min-genes gate as the enrichment.
+rule diffopen_tracks:
+    input:
+        summary = f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
+        models  = f"{DIFFOPEN_DIR}/gene_models.rds",
+        bigwigs = expand(f"{BIGWIG_DIR}/{{sample}}.bw", sample=SAMPLES),
+    output:
+        done = touch(f"{DIFFOPEN_DIR}/{{mode}}/tracks/.tracks_done"),
+    params:
+        genedir   = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/genes",
+        outdir    = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/tracks",
+        bwdir     = BIGWIG_DIR,
+        tier      = config.get("diffopen_track_tier", "p01"),
+        top       = config.get("diffopen_track_top", 5),
+        min_genes = config.get("diffopen_min_genes", 10),
+    conda:
+        "../envs/r-diffopen.yaml"
+    log:
+        "logs/diffopen/tracks_{mode}.log"
+    shell:
+        """
+        mkdir -p logs/diffopen {params.outdir}
+        Rscript workflow/scripts/diffopen_tracks.R \
+            --genedir {params.genedir} --bigwigdir {params.bwdir} \
+            --models {input.models} --outdir {params.outdir} \
+            --tier {params.tier} --top {params.top} \
+            --min-genes {params.min_genes} > {log} 2>&1
+        """
+
+
+# Self-contained HTML summary comparing every normalization side by side.
+# Runs in the snakemake env (python + pandas); charts are inline SVG so the page
+# needs no external assets and opens anywhere.
+rule diffopen_report:
+    input:
+        summaries = expand(f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt", mode=DIFFOPEN_MODES),
+        hybrid    = f"{DIFFOPEN_DIR}/anchor_shape/run_summary.txt",
+    output:
+        html = f"{DIFFOPEN_DIR}/diffopen_report.html",
+    params:
+        indir    = DIFFOPEN_DIR,
+        contrast = lambda w: f"{config.get('diffopen_ref_label', 'Control')} (reference)",
+    conda:
+        "../envs/snakemake.yaml"
+    log:
+        "logs/diffopen/report.log"
+    shell:
+        """
+        mkdir -p logs/diffopen
+        python workflow/scripts/build_diffopen_report.py \
+            --diffopen-dir {params.indir} \
+            --out {output.html} > {log} 2>&1
         """
 
 
@@ -113,3 +267,14 @@ rule diffopen_all:
         expand(f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt", mode=DIFFOPEN_MODES),
         rules.diffopen_anchor_shape.output.table,
         rules.diffopen_anchor_shape.output.summary,
+        rules.diffopen_report.output.html,
+        # Downstream runs for the hybrid too: it now emits the same
+        # diffopen_{promoter,enhancer}.tsv layout, so the wildcard rules apply
+        # unchanged (rule `diffopen` is constrained to none|spikein|ctcf, so
+        # there is no ambiguity over who produces the anchor_shape tables).
+        expand(f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
+               mode=DIFFOPEN_MODES + ["anchor_shape"]),
+        expand(f"{DIFFOPEN_DIR}/{{mode}}/enrichment/enrichment_summary.tsv",
+               mode=DIFFOPEN_MODES + ["anchor_shape"]),
+        expand(f"{DIFFOPEN_DIR}/{{mode}}/tracks/.tracks_done",
+               mode=DIFFOPEN_MODES + ["anchor_shape"]),

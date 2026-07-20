@@ -22,9 +22,16 @@
 #       --counts   results/consensus/consensus_counts.txt \
 #       --spikein  results/spikein/normalization_factors.tsv \
 #       --samples  config/samples.csv \
-#       --ctcf     ref/GRCh38-cCREs.CTCF-only.bed \
+#       --ctcf     ref/constitutive_ctcf_hg38.bed \
 #       --outdir   results/diffopen/anchor_shape \
+#       [--promoter-bed ref/promoter_chr1-22X.bed] \
+#       [--enhancer-bed ref/enhancer_chr1-22X.bed] \
 #       [--span 0.6] [--trim-k 2.5] [--iter 2] [--ref-label Control]
+#
+# With the two class BEDs it also splits the result into promoter / enhancer
+# (promoter precedence), fitting each class on its own rows of the offset matrix
+# -- the same layout the none/spikein/ctcf modes emit, so the four
+# normalizations can be compared class-for-class.
 #
 # Or via Snakemake (recommended):  snakemake --use-conda diffopen_anchor_shape
 #
@@ -41,7 +48,7 @@ suppressPackageStartupMessages({
 # ---- tiny --key value arg parser -------------------------------------------
 parse_args <- function(args) {
   out <- list(span = "0.6", `trim-k` = "2.5", iter = "2", `ref-label` = "Control",
-              `min-refs` = "200")
+              `min-refs` = "200", `min-class-peaks` = "100")
   i <- 1
   while (i <= length(args)) {
     key <- sub("^--", "", args[i]); out[[key]] <- args[i + 1]; i <- i + 2
@@ -81,12 +88,27 @@ read_design <- function(path, ref_label) {
 
 # ---- CTCF anchor selection --------------------------------------------------
 
-#' Logical over consensus peaks: TRUE where the peak overlaps a CTCF cCRE.
-ctcf_overlap <- function(coords, ctcf_path) {
-  cc <- read.delim(ctcf_path, header = FALSE, stringsAsFactors = FALSE)
-  ctcf  <- GRanges(cc[[1]], IRanges(cc[[2]] + 1L, cc[[3]]))        # BED 0-based -> 1-based
+#' Logical over consensus peaks: TRUE where the peak overlaps any feature in a BED.
+bed_overlap <- function(coords, bed_path) {
+  b <- read.delim(bed_path, header = FALSE, stringsAsFactors = FALSE)
+  feat  <- GRanges(b[[1]], IRanges(b[[2]] + 1L, b[[3]]))           # BED 0-based -> 1-based
   peaks <- GRanges(coords$Chr, IRanges(coords$Start, coords$End))
-  overlapsAny(peaks, ctcf)
+  overlapsAny(peaks, feat)
+}
+
+#' Logical over consensus peaks: TRUE where the peak overlaps a CTCF cCRE.
+ctcf_overlap <- function(coords, ctcf_path) bed_overlap(coords, ctcf_path)
+
+#' Classify each consensus peak as promoter / enhancer / other.
+#'
+#' Identical rule to diffopen.R so the hybrid's classes are directly comparable
+#' with the none/spikein/ctcf modes: PROMOTER PRECEDENCE, i.e. a peak overlapping
+#' both a promoter and an enhancer feature is called a promoter, never counted twice.
+classify_peaks <- function(coords, promoter_bed, enhancer_bed) {
+  prom <- bed_overlap(coords, promoter_bed)
+  enh  <- bed_overlap(coords, enhancer_bed) & !prom
+  factor(ifelse(prom, "promoter", ifelse(enh, "enhancer", "other")),
+         levels = c("promoter", "enhancer", "other"))
 }
 
 # ---- core: level + (trimmed) CTCF shape -> normalizationFactors -------------
@@ -146,11 +168,28 @@ anchor_shape_offsets <- function(counts, spike_reads, ref_idx0, condition,
 
 # ---- DESeq2 with the region-specific offset --------------------------------
 
-run_deseq2 <- function(counts, coords, condition, pair, NF, g0) {
+#' Fit one peak class with the GLOBAL offsets injected.
+#'
+#' The normalizationFactors matrix is row-centered (each row's geometric mean is
+#' 1), so taking the rows of one class is exactly the normalization the genome-wide
+#' fit applied to those same regions -- the level o_i and the shape s_i(A) are
+#' still estimated once, from the spike-in and from ALL CTCF anchors. Only the
+#' dispersion trend and the FDR are class-local, which is the point of splitting.
+#'
+#' @param idx row indices of the class (NULL = all peaks)
+run_deseq2 <- function(counts, coords, condition, pair, NF, g0, idx = NULL,
+                       label = "all") {
+  if (!is.null(idx)) {
+    counts <- counts[idx, , drop = FALSE]
+    coords <- coords[idx, , drop = FALSE]
+    NF     <- NF[idx, , drop = FALSE]
+  }
   coldata <- data.frame(condition = condition, pair = pair, row.names = colnames(counts))
   paired  <- nlevels(droplevels(pair)) > 1 &&
              all(table(coldata$pair, coldata$condition) == 1)
   design  <- if (paired) ~pair + condition else ~condition
+  message(sprintf("[%s] %d peaks | design %s%s", label, nrow(counts),
+                  deparse(design), if (paired) " (paired)" else " (unpaired)"))
   dds <- DESeq2::DESeqDataSetFromMatrix(counts, coldata, design)
   DESeq2::normalizationFactors(dds) <- NF          # NOT estimateSizeFactors: use ours
   dds <- DESeq2::estimateDispersions(dds)
@@ -159,14 +198,37 @@ run_deseq2 <- function(counts, coords, condition, pair, NF, g0) {
   res <- DESeq2::results(dds, name = cf)
   shr <- tryCatch(DESeq2::lfcShrink(dds, coef = cf, type = "apeglm"),
                   error = function(e) res)
-  data.frame(coords,
+  list(
+    table = data.frame(coords,
              baseMean          = res$baseMean,
              log2FoldChange    = shr$log2FoldChange,   # ABSOLUTE (spike-anchored)
              excess_over_global= shr$log2FoldChange - g0,  # local rho effect
              lfcSE             = shr$lfcSE,
              pvalue            = res$pvalue,
              padj              = res$padj,
-             row.names = NULL, check.names = FALSE)
+             row.names = NULL, check.names = FALSE),
+    contrast = cf,
+    n        = nrow(counts),
+    n_sig    = sum(res$padj < 0.05, na.rm = TRUE),
+    n_nom    = sum(res$pvalue < 0.05, na.rm = TRUE),
+    n_nom01  = sum(res$pvalue < 0.01, na.rm = TRUE),
+    med_lfc  = stats::median(shr$log2FoldChange, na.rm = TRUE),
+    up_frac  = mean(shr$log2FoldChange[which(res$pvalue < 0.05)] > 0, na.rm = TRUE)
+  )
+}
+
+#' Write a results table plus pre-filtered nominal-significance subsets.
+#' Same layout as diffopen.R so the downstream annotate/enrich/tracks rules read
+#' the hybrid's output with no special-casing.
+write_results <- function(tbl, outdir, stem) {
+  wr <- function(x, f) utils::write.table(x, file.path(outdir, f), sep = "\t",
+                                          quote = FALSE, row.names = FALSE)
+  wr(tbl, paste0(stem, ".tsv"))
+  for (thr in c(0.05, 0.01)) {
+    sub <- tbl[!is.na(tbl$pvalue) & tbl$pvalue < thr, , drop = FALSE]
+    sub <- sub[order(sub$pvalue), , drop = FALSE]
+    wr(sub, sprintf("%s_nominal_p%02d.tsv", stem, round(thr * 100)))
+  }
 }
 
 # ---- diagnostics ------------------------------------------------------------
@@ -235,11 +297,32 @@ main <- function() {
   fit <- anchor_shape_offsets(counts, spike, ref0, condition,
                               span = as.numeric(a$span), trim_k = as.numeric(a$`trim-k`),
                               iter = as.integer(a$iter), min_refs = as.integer(a$`min-refs`))
-  res <- run_deseq2(counts, fc$coords, condition, pair, fit$NF, fit$g0)
+  fits <- list(all = run_deseq2(counts, fc$coords, condition, pair, fit$NF, fit$g0,
+                                NULL, "all"))
+  res  <- fits$all$table
+
+  # Split promoter / enhancer exactly as the none/spikein/ctcf modes do, so the
+  # four normalizations are compared class-for-class.
+  cls <- NULL
+  if (!is.null(a$`promoter-bed`) && !is.null(a$`enhancer-bed`)) {
+    cls <- classify_peaks(fc$coords, a$`promoter-bed`, a$`enhancer-bed`)
+    message("peak classes: ",
+            paste(sprintf("%s=%d", levels(cls), as.integer(table(cls))), collapse = "  "))
+    for (k in c("promoter", "enhancer")) {
+      idx <- which(cls == k)
+      if (length(idx) < as.integer(a$`min-class-peaks`)) {
+        message(sprintf("skipping %s: only %d peaks", k, length(idx))); next
+      }
+      fits[[k]] <- run_deseq2(counts, fc$coords, condition, pair, fit$NF, fit$g0, idx, k)
+    }
+  }
 
   # outputs
-  utils::write.table(res, file.path(a$outdir, "differential_openness.tsv"),
-                     sep = "\t", quote = FALSE, row.names = FALSE)
+  write_results(res, a$outdir, "differential_openness")
+  for (k in c("promoter", "enhancer")) {
+    if (!is.null(fits[[k]])) write_results(fits[[k]]$table, a$outdir,
+                                           sprintf("diffopen_%s", k))
+  }
   ref_names <- fc$coords$Geneid[fit$ref_idx_final]
   writeLines(ref_names, file.path(a$outdir, "invariant_ctcf_anchors.txt"))
   lvl <- data.frame(sample = colnames(counts), spikein_reads = spike,
@@ -250,6 +333,57 @@ main <- function() {
 
   # run summary + the key diagnostic (spike-in vs CTCF-invariance agreement)
   n_sig <- sum(res$padj < 0.05, na.rm = TRUE)
+  class_lines <- character(0)
+  if (!is.null(cls)) {
+    tb <- table(cls)
+    class_lines <- c(
+      "",
+      sprintf("peak classes (promoter precedence): promoter=%d  enhancer=%d  other=%d",
+              tb[["promoter"]], tb[["enhancer"]], tb[["other"]]),
+      "  class             n    padj<0.05   p<0.05   p<0.01   median log2FC   %% up (p<0.05)")
+    for (k in c("all", "promoter", "enhancer")) {
+      f <- fits[[k]]
+      if (is.null(f)) next
+      class_lines <- c(class_lines,
+        sprintf("  %-10s %7d %8d %8d %8d %14.4f %12.1f%%",
+                k, f$n, f$n_sig, f$n_nom, f$n_nom01, f$med_lfc, 100 * f$up_frac))
+    }
+    class_lines <- c(class_lines,
+      "",
+      "  ---- how to read this table -------------------------------------------",
+      "  n            peaks in the class, assigned by overlap with the Ensembl",
+      "               Regulatory Build BEDs, PROMOTER PRECEDENCE (a peak hitting",
+      "               both is counted as promoter, never twice). Each class is fit",
+      "               separately for its own dispersion trend and within-class FDR.",
+      "               The normalization is NOT re-estimated per class: the spike-in",
+      "               level o_i and the CTCF shape s_i(A) are fit once, genome-wide,",
+      "               and each class simply uses its own rows of that offset matrix.",
+      "",
+      "  padj<0.05    Benjamini-Hochberg significant WITHIN the class. The only",
+      "               column you may quote as 'significant'; expect few at n=3.",
+      "",
+      "  p<0.05 /     Nominal, NOT corrected. Do not report as significant sites and",
+      "  p<0.01       do not read their COUNT as evidence -- DESeq2 is conservative",
+      "               at n=3, so the count can fall BELOW the ~5%% chance expectation.",
+      "               They exist to expose direction.",
+      "",
+      "  %% up         Of the p<0.05 peaks, the fraction with log2FoldChange > 0",
+      "               (MORE OPEN IN TREATMENT). A DIRECTION BALANCE, not significance.",
+      "                 ~50%%        no coherent directional program",
+      "                 70-95%%      a real, coordinated shift -- and it should get",
+      "                             STRONGER from p<0.05 to p<0.01 (noise regresses",
+      "                             to 50%%, true signal sharpens)",
+      "                 exactly 100%% SUSPECT: a perfect one-directional split across",
+      "                             independent classes is the fingerprint of a global",
+      "                             scaling artifact, not biology.",
+      "",
+      "  CAVEAT specific to this mode: log2FC here is ABSOLUTE (spike-in-anchored),",
+      "  so a genuine genome-wide shift is PRESERVED rather than normalized away.",
+      "  A skewed %% up is therefore expected when g0 is far from 0 and is NOT by",
+      "  itself an artifact -- read it together with g0 above, and use the",
+      "  excess_over_global column for the local, shift-corrected effect.",
+      "  ------------------------------------------------------------------------")
+  }
   summ <- c(
     sprintf("consensus peaks           : %d", nrow(counts)),
     sprintf("CTCF anchors (initial)    : %d", length(ref0)),
@@ -258,7 +392,8 @@ main <- function() {
             fit$g0, ifelse(fit$g0 < 0, "globally DOWN", "globally UP")),
     sprintf("  |g0| interpretation     : ~0 => spike-in agrees with CTCF-invariance (robust);"),
     sprintf("                            large => spike-in is rescuing a global shift TMM/CTCF-only would delete"),
-    sprintf("differential (padj<0.05)  : %d", n_sig))
+    sprintf("differential (padj<0.05)  : %d", n_sig),
+    class_lines)
   writeLines(summ, file.path(a$outdir, "run_summary.txt"))
   cat(paste(summ, collapse = "\n"), "\n")
   message("done -> ", a$outdir)

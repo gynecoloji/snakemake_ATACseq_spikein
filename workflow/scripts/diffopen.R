@@ -168,6 +168,23 @@ size_factors_ctcf <- function(counts, anchor_idx, condition,
 
 # ---- DESeq2 -----------------------------------------------------------------
 
+#' Write a results table plus pre-filtered nominal-significance subsets.
+#'
+#' With n=3 the per-peak FDR is very conservative, so the interpretable signal
+#' lives in the nominal-p sets (read their up/down DIRECTION balance, not their
+#' size -- the counts can fall below chance expectation). p<0.01 is the tighter
+#' set typically carried into gene annotation / enrichment.
+write_results <- function(tbl, outdir, stem) {
+  wr <- function(x, f) utils::write.table(x, file.path(outdir, f), sep = "\t",
+                                          quote = FALSE, row.names = FALSE)
+  wr(tbl, paste0(stem, ".tsv"))
+  for (thr in c(0.05, 0.01)) {
+    sub <- tbl[!is.na(tbl$pvalue) & tbl$pvalue < thr, , drop = FALSE]
+    sub <- sub[order(sub$pvalue), , drop = FALSE]
+    wr(sub, sprintf("%s_nominal_p%02d.tsv", stem, round(thr * 100)))
+  }
+}
+
 #' DESeq2 size factors as DESeq2 itself would estimate them (mode=none), computed
 #' ONCE on the full matrix so every peak class shares them.
 size_factors_deseq2 <- function(counts, condition) {
@@ -218,6 +235,7 @@ fit_class <- function(counts, coords, condition, pair, size_factors, idx = NULL,
     n        = nrow(counts),
     n_sig    = sum(res$padj < 0.05, na.rm = TRUE),
     n_nom    = sum(res$pvalue < 0.05, na.rm = TRUE),
+    n_nom01  = sum(res$pvalue < 0.01, na.rm = TRUE),
     med_lfc  = stats::median(shr$log2FoldChange, na.rm = TRUE),
     up_frac  = mean(shr$log2FoldChange[which(res$pvalue < 0.05)] > 0, na.rm = TRUE)
   )
@@ -296,13 +314,10 @@ main <- function() {
   }
 
   # ---- outputs ----
-  utils::write.table(res, file.path(a$outdir, "differential_openness.tsv"),
-                     sep = "\t", quote = FALSE, row.names = FALSE)
+  write_results(res, a$outdir, "differential_openness")
   for (k in c("promoter", "enhancer")) {
     if (!is.null(fits[[k]]))
-      utils::write.table(fits[[k]]$table,
-                         file.path(a$outdir, sprintf("diffopen_%s.tsv", k)),
-                         sep = "\t", quote = FALSE, row.names = FALSE)
+      write_results(fits[[k]]$table, a$outdir, sprintf("diffopen_%s", k))
   }
   sft <- data.frame(sample = names(sf), size_factor = as.numeric(sf),
                     row.names = NULL, check.names = FALSE)
@@ -329,17 +344,51 @@ main <- function() {
       "",
       sprintf("peak classes (promoter precedence): promoter=%d  enhancer=%d  other=%d",
               tb[["promoter"]], tb[["enhancer"]], tb[["other"]]),
-      "  class                n      padj<0.05   p<0.05   median log2FC   %% up (of p<0.05)")
+      "  class             n    padj<0.05   p<0.05   p<0.01   median log2FC   %% up (p<0.05)")
     for (k in c("all", "promoter", "enhancer")) {
       f <- fits[[k]]
       if (is.null(f)) next
       class_lines <- c(class_lines,
-        sprintf("  %-10s %8d   %8d %8d %14.4f %14.1f%%",
-                k, f$n, f$n_sig, f$n_nom, f$med_lfc, 100 * f$up_frac))
+        sprintf("  %-10s %7d %8d %8d %8d %14.4f %12.1f%%",
+                k, f$n, f$n_sig, f$n_nom, f$n_nom01, f$med_lfc, 100 * f$up_frac))
     }
     class_lines <- c(class_lines,
-      "  (each class fit separately -> own dispersion trend and within-class FDR;",
-      "   size factors are shared, computed once on all peaks)")
+      "",
+      "  ---- how to read this table -------------------------------------------",
+      "  n            peaks in the class. Promoter/enhancer are assigned by overlap",
+      "               with the Ensembl Regulatory Build BEDs, PROMOTER PRECEDENCE",
+      "               (a peak hitting both is counted as promoter, never twice).",
+      "               Each class is fit separately, so it gets its own dispersion",
+      "               trend and its own within-class FDR. Size factors are NOT",
+      "               re-estimated per class -- they are a library-level property,",
+      "               computed once on all peaks and shared.",
+      "",
+      "  padj<0.05    Benjamini-Hochberg significant WITHIN the class. With n=3 per",
+      "               condition the per-peak power is very low, so expect few or",
+      "               none; this is the only column you may quote as 'significant'.",
+      "",
+      "  p<0.05 /     Nominal, NOT multiple-testing corrected. Do not report these",
+      "  p<0.01       as significant sites, and do not read their COUNT as evidence:",
+      "               DESeq2's p-values are conservative at n=3, so the count can sit",
+      "               BELOW the ~5%% expected by chance. They exist to expose direction.",
+      "",
+      "  %% up         Of the p<0.05 peaks, the fraction with log2FoldChange > 0, i.e.",
+      "               MORE OPEN IN TREATMENT. This is a DIRECTION BALANCE, not a",
+      "               significance measure. Under the null it sits near 50%%.",
+      "               Interpretation:",
+      "                 ~50%%        no coherent directional program",
+      "                 70-95%%      a real, coordinated shift -- and it should get",
+      "                             STRONGER as you tighten p<0.05 -> p<0.01 (noise",
+      "                             regresses to 50%%, true signal sharpens)",
+      "                 exactly 100%% SUSPECT. A perfect one-directional split across",
+      "                             independent classes is the fingerprint of a global",
+      "                             scaling artifact (a bad size-factor set), not",
+      "                             biology. Cross-check the size-factor spread above.",
+      "",
+      "  Compare modes before trusting any single one: `none` and `ctcf` should",
+      "  broadly agree; where they disagree, that axis is normalization-dependent",
+      "  and should not be reported as a finding.",
+      "  ------------------------------------------------------------------------")
   }
   summ <- c(
     sprintf("normalization mode        : %s", mode),
