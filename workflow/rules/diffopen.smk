@@ -211,6 +211,56 @@ rule diffopen_enrich:
         """
 
 
+# Per-mode bigWigs scaled by that mode's own DESeq2 size factors, so the browser
+# tracks are on the same footing as the differential test that selected the
+# regions. Built from the SAME .nobl.bam featureCounts counted, so the track and
+# the table describe the same data.
+#
+# NOT RPGC: the size factors already carry the depth correction, and layering
+# --normalizeUsing on top would normalize twice. Raw coverage x 1/sf only.
+#
+# anchor_shape is deliberately absent (wildcard_constraints below). Its
+# normalization is a per-region G x n offset matrix, not a per-sample scalar, so
+# no single --scaleFactor can express it; its tracks stay on the shared RPGC set.
+rule diffopen_bigwig:
+    wildcard_constraints:
+        mode = "none|spikein|ctcf"
+    input:
+        bam     = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
+        bai     = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai",
+        factors = f"{DIFFOPEN_DIR}/{{mode}}/size_factors.tsv",
+    output:
+        bw = f"{DIFFOPEN_DIR}/{{mode}}/bigwig/{{sample}}.bw",
+    params:
+        bin_size  = config["bin_size"],
+        blacklist = config["blacklist"],
+    threads: 8
+    conda:
+        "../envs/deeptools.yaml"
+    log:
+        "logs/diffopen/bigwig_{mode}_{sample}.log"
+    shell:
+        """
+        mkdir -p $(dirname {output.bw}) logs/diffopen
+        # DESeq2 DIVIDES counts by the size factor; bamCoverage MULTIPLIES by
+        # --scaleFactor. The track factor is therefore 1/sf, not sf.
+        SF=$(awk -F'\t' -v s="{wildcards.sample}" \
+               'NR>1 && $1==s && $2+0>0 {{printf "%.10f", 1/$2}}' {input.factors})
+        if [ -z "$SF" ]; then
+            echo "no usable size factor for {wildcards.sample} in {input.factors}" >&2
+            exit 1
+        fi
+        echo "scaling {wildcards.sample} ({wildcards.mode}) by 1/sf = $SF" > {log}
+        bamCoverage --bam {input.bam} \
+            --scaleFactor $SF \
+            --binSize {params.bin_size} \
+            --numberOfProcessors {threads} \
+            --extendReads \
+            --blackListFileName {params.blacklist} \
+            --outFileName {output.bw} >> {log} 2>&1
+        """
+
+
 # Gviz browser tracks for the top up/down regions, one figure per gene
 # (PNG + PDF). Same >min-genes gate as the enrichment.
 rule diffopen_tracks:
@@ -219,13 +269,14 @@ rule diffopen_tracks:
         script  = "workflow/scripts/diffopen_tracks.R",
         summary = f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
         models  = f"{DIFFOPEN_DIR}/gene_models.rds",
-        bigwigs = expand(f"{BIGWIG_DIR}/{{sample}}.bw", sample=SAMPLES),
+        # mode's own size-factor-scaled tracks; RPGC fallback for anchor_shape
+        bigwigs = _diffopen_track_bigwigs,
     output:
         done = touch(f"{DIFFOPEN_DIR}/{{mode}}/tracks/.tracks_done"),
     params:
         genedir   = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/genes",
         outdir    = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/tracks",
-        bwdir     = BIGWIG_DIR,
+        bwdir     = _diffopen_track_bwdir,
         tier      = config.get("diffopen_track_tier", "p01"),
         top       = config.get("diffopen_track_top", 5),
         min_genes = config.get("diffopen_min_genes", 10),

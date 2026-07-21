@@ -6,7 +6,12 @@ Stdlib only. Mirrors snakemake_debug/scripts/build_report.py: parse pipeline
 outputs into a DATA dict (interactive chart series, not embedded images),
 emit HEAD+<script>DATA</script>+JS.
 """
-import argparse, csv, glob, json, os, re
+import argparse, csv, glob, json, math, os, re
+
+# IDR reproducibility threshold. IDR output stores globalIDR as -log10, so the
+# comparison is against -log10(threshold), not the threshold itself.
+IDR_THRESHOLD = 0.05
+IDR_NEGLOG10 = -math.log10(IDR_THRESHOLD)
 
 # Colorblind-safe (Paul Tol) qualitative palette; assigned to samples by order so
 # a given sample keeps one color across every figure.
@@ -446,6 +451,44 @@ def build_data(results_dir, samples):
     n_consensus = sum(1 for ln in _rd(cbed).splitlines() if ln and not ln.startswith("#")) if os.path.exists(cbed) else 0
     sections["consensus"] = {"n_peaks": n_consensus}
 
+    # Pairwise IDR reproducibility (results/idr/). This is a QC read-out, NOT the
+    # consensus path: a condition with >=3 replicates builds its consensus by
+    # majority vote, and only 2-replicate conditions use IDR to pick peaks. The
+    # pairwise runs below are computed either way so replicate agreement is
+    # visible.
+    idr_rows = []
+    for path in sorted(glob.glob(f"{R}/idr/*--idr_peaks.*.txt")):
+        parts = os.path.basename(path).split("--")
+        if len(parts) < 4:
+            continue
+        n_tot, n_pass = 0, 0
+        for ln in _rd(path).splitlines():
+            if not ln or ln.startswith("#"):
+                continue
+            f = ln.split("\t")
+            if len(f) < 12:
+                continue
+            n_tot += 1
+            # col 12 is globalIDR as -log10(IDR); IDR<0.05 <=> value > 1.30103
+            try:
+                if float(f[11]) > IDR_NEGLOG10:
+                    n_pass += 1
+            except ValueError:
+                pass
+        idr_rows.append({"group": parts[0], "rep1": parts[1], "rep2": parts[2],
+                         "n_total": n_tot, "n_pass": n_pass,
+                         "frac": (n_pass / n_tot) if n_tot else 0.0})
+    if idr_rows:
+        sections["idr"] = {
+            "rows": idr_rows, "threshold": IDR_THRESHOLD,
+            "note": "Pairwise IDR between replicates of the same condition. "
+                    "'passing' = globalIDR < %.2f. Read the FRACTION, not the count: "
+                    "a low fraction means the two replicates rank peaks differently, "
+                    "i.e. poor reproducibility. This is diagnostic only -- conditions "
+                    "with >=3 replicates build their consensus by majority vote, not "
+                    "from these pairs. Per-pair IDR plots are in results/idr/*.png."
+                    % IDR_THRESHOLD}
+
     # Interactive charts (data-driven; no embedded images). Each guarded by file existence.
     colors = sample_colors(samples)
     D = f"{R}/deeptools"
@@ -776,6 +819,30 @@ function render(){
   // Consensus
   if(DATA.sections.consensus){app.appendChild(section('Consensus peaks',
     el('p',null,'Consensus peak regions: <b>'+DATA.sections.consensus.n_peaks+'</b>')));}
+  // Pairwise IDR reproducibility between replicates of the same condition
+  if(DATA.sections.idr){
+    var I=DATA.sections.idr, iw=el('div');
+    var it=el('table'),ih=el('thead'),ihr=el('tr');
+    ['condition','replicate 1','replicate 2','peaks tested','passing IDR<'+I.threshold,'fraction']
+      .forEach(function(c){ihr.appendChild(el('th',null,c));});
+    ih.appendChild(ihr);it.appendChild(ih);
+    var ib=el('tbody');
+    I.rows.forEach(function(r){
+      var tr=el('tr');
+      tr.appendChild(el('td',null,r.group));
+      tr.appendChild(el('td',null,short(r.rep1)));
+      tr.appendChild(el('td',null,short(r.rep2)));
+      tr.appendChild(el('td',null,fnum(r.n_total)));
+      tr.appendChild(el('td',null,fnum(r.n_pass)));
+      // ENCODE-style bands on the reproducible FRACTION, not the raw count
+      var cls = r.frac>=0.5 ? 'pass' : (r.frac>=0.2 ? 'warn' : 'fail');
+      tr.appendChild(el('td',cls,(100*r.frac).toFixed(1)+'%'));
+      ib.appendChild(tr);
+    });
+    it.appendChild(ib);iw.appendChild(it);
+    iw.appendChild(el('p','muted',I.note));
+    app.appendChild(section('Replicate reproducibility (pairwise IDR)', iw));
+  }
   // Interactive charts (data-driven; consistent per-sample colors)
   var C=DATA.charts||{}, colors=DATA.colors||{};
   var cwrap=el('div','charts');

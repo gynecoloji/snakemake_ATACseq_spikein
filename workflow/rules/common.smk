@@ -111,6 +111,27 @@ FASTP_ADAPTER_ARGS = _fastp_adapter_args()
 def _group_relaxed_inputs(wildcards):
     return [f"{RELAXED_PEAKS_DIR}/{s}_relaxed.narrowPeak" for s in GROUPS[wildcards.group]]
 
+def _diffopen_track_bigwigs(wildcards):
+    """bigWigs for the Gviz tracks of one mode.
+
+    A mode with a per-sample SCALAR size factor (the DIFFOPEN_MODES) gets its own
+    size-factor-scaled set, so the track matches the test that picked the region.
+    anchor_shape is not in that list: its normalization is a per-region G x n
+    offset matrix, which no single --scaleFactor can express, so it falls back to
+    the shared depth-normalized (RPGC) tracks.
+    """
+    if wildcards.mode in DIFFOPEN_MODES:
+        return expand(f"{DIFFOPEN_DIR}/{wildcards.mode}/bigwig/{{sample}}.bw",
+                      sample=SAMPLES)
+    return expand(f"{BIGWIG_DIR}/{{sample}}.bw", sample=SAMPLES)
+
+
+def _diffopen_track_bwdir(wildcards):
+    """Directory matching _diffopen_track_bigwigs (the R script globs it)."""
+    return (f"{DIFFOPEN_DIR}/{wildcards.mode}/bigwig"
+            if wildcards.mode in DIFFOPEN_MODES else BIGWIG_DIR)
+
+
 def _diffopen_extra_input(wildcards):
     """Mode-specific extra input for the `diffopen` rule.
 
