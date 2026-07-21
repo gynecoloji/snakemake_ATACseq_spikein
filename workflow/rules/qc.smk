@@ -7,7 +7,9 @@
 # filtered/, peaks/, spikein/, bigwig/). Shared config, samples, directory
 # constants and helpers live in common.smk (included first by workflow/Snakefile).
 
-localrules: multiqc_fastqc
+
+localrules:
+    multiqc_fastqc,
 
 
 # Aggregate target for the QC pipeline. Run it alone (after the primary pipeline
@@ -15,7 +17,9 @@ localrules: multiqc_fastqc
 rule qc_all:
     input:
         # deepTools coverage + QC
-        expand(os.path.join(BEDGRAPH_DIR, "{sample}.nobl.RPGC.bedgraph"), sample=SAMPLES),
+        expand(
+            os.path.join(BEDGRAPH_DIR, "{sample}.nobl.RPGC.bedgraph"), sample=SAMPLES
+        ),
         os.path.join(DEEPTOOLS_DIR, "fragmentSize.png"),
         os.path.join(DEEPTOOLS_DIR, "fragmentsize.txt"),
         os.path.join(DEEPTOOLS_DIR, "ATACseq_fingerprint.png"),
@@ -33,9 +37,23 @@ rule qc_all:
         os.path.join(DEEPTOOLS_DIR, "Profile_TSS.png"),
         os.path.join(QC_DIR, "tss_enrichment_mqc.txt"),
         # FRiP + IDR (relaxed) + library complexity
-        expand(os.path.join(FRIP_DIR, "{sample}.{condition}.frip.txt"), sample=SAMPLES, condition=PEAK_TYPES),
-        [expand(os.path.join(IDR_DIR, "{group}--{rep1}--{rep2}--idr_peaks.{condition}.txt"),
-                condition=PEAK_TYPES, group=[g], rep1=[r1], rep2=[r2]) for g, r1, r2 in IDR_PAIRS],
+        expand(
+            os.path.join(FRIP_DIR, "{sample}.{condition}.frip.txt"),
+            sample=SAMPLES,
+            condition=PEAK_TYPES,
+        ),
+        [
+            expand(
+                os.path.join(
+                    IDR_DIR, "{group}--{rep1}--{rep2}--idr_peaks.{condition}.txt"
+                ),
+                condition=PEAK_TYPES,
+                group=[g],
+                rep1=[r1],
+                rep2=[r2],
+            )
+            for g, r1, r2 in IDR_PAIRS
+        ],
         expand(os.path.join(COMPLEXITY_DIR, "{sample}_complexity.txt"), sample=SAMPLES),
         # NEW: spike-in QC, peak+annotation summary
         os.path.join(SPIKEIN_QC_DIR, "spikein_fraction_mqc.txt"),
@@ -44,20 +62,20 @@ rule qc_all:
         # FastQC-only MultiQC report
         os.path.join(QC_DIR, "multiqc_fastqc.html"),
         # Interactive HTML QC report
-        os.path.join(QC_DIR, "atacseq_qc_report.html")
+        os.path.join(QC_DIR, "atacseq_qc_report.html"),
 
 
 # 1. RPGC bedgraph per sample (coverage QC; main pipeline makes bigWigs, not bedgraphs)
 rule deeptools_bedgraph:
     input:
-        bam = os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam")
+        bam=os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"),
     output:
-        bedgraph = os.path.join(BEDGRAPH_DIR, "{sample}.nobl.RPGC.bedgraph")
+        bedgraph=os.path.join(BEDGRAPH_DIR, "{sample}.nobl.RPGC.bedgraph"),
     threads: 8
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/deeptools_bedgraph/{sample}.log"
+        "logs/deeptools_bedgraph/{sample}.log",
     shell:
         """
         mkdir -p {BEDGRAPH_DIR} logs/deeptools_bedgraph
@@ -73,16 +91,16 @@ rule deeptools_bedgraph:
 # 2. Fragment size distribution (ATAC nucleosome periodicity)
 rule deeptools_fragmentsize:
     input:
-        bams = expand(os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"), sample=SAMPLES)
+        bams=expand(os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"), sample=SAMPLES),
     output:
-        plot = os.path.join(DEEPTOOLS_DIR, "fragmentSize.png"),
-        table = os.path.join(DEEPTOOLS_DIR, "fragmentsize.txt"),
-        raw = os.path.join(DEEPTOOLS_DIR, "fragment_lengths.txt")
+        plot=os.path.join(DEEPTOOLS_DIR, "fragmentSize.png"),
+        table=os.path.join(DEEPTOOLS_DIR, "fragmentsize.txt"),
+        raw=os.path.join(DEEPTOOLS_DIR, "fragment_lengths.txt"),
     threads: 12
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/deeptools_fragmentsize/fragmentsize.log"
+        "logs/deeptools_fragmentsize/fragmentsize.log",
     shell:
         """
         mkdir -p {DEEPTOOLS_DIR} logs/deeptools_fragmentsize
@@ -99,15 +117,15 @@ rule deeptools_fragmentsize:
 # 3. Fingerprint (signal-to-noise)
 rule deeptools_plotfingerprint:
     input:
-        bams = expand(os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"), sample=SAMPLES)
+        bams=expand(os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"), sample=SAMPLES),
     output:
-        plot = os.path.join(DEEPTOOLS_DIR, "ATACseq_fingerprint.png"),
-        table = os.path.join(DEEPTOOLS_DIR, "ATACseq_fingerprint.tab")
+        plot=os.path.join(DEEPTOOLS_DIR, "ATACseq_fingerprint.png"),
+        table=os.path.join(DEEPTOOLS_DIR, "ATACseq_fingerprint.tab"),
     threads: 12
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/deeptools_plotfingerprint/fingerprint.log"
+        "logs/deeptools_plotfingerprint/fingerprint.log",
     shell:
         """
         mkdir -p {DEEPTOOLS_DIR} logs/deeptools_plotfingerprint
@@ -125,15 +143,15 @@ rule deeptools_plotfingerprint:
 # 4. Correlation / PCA across samples
 rule deeptools_cor_multibam:
     input:
-        bams = expand(os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"), sample=SAMPLES)
+        bams=expand(os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"), sample=SAMPLES),
     output:
-        npz = os.path.join(DEEPTOOLS_DIR, "deeptools_multiBAM.out.npz"),
-        counts = os.path.join(DEEPTOOLS_DIR, "deeptools_readCounts.tab")
+        npz=os.path.join(DEEPTOOLS_DIR, "deeptools_multiBAM.out.npz"),
+        counts=os.path.join(DEEPTOOLS_DIR, "deeptools_readCounts.tab"),
     threads: 12
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/deeptools_correlation/multibam.log"
+        "logs/deeptools_correlation/multibam.log",
     shell:
         """
         mkdir -p {DEEPTOOLS_DIR} logs/deeptools_correlation
@@ -149,14 +167,14 @@ rule deeptools_cor_multibam:
 
 rule deeptools_cor_scatterplot:
     input:
-        npz = os.path.join(DEEPTOOLS_DIR, "deeptools_multiBAM.out.npz")
+        npz=os.path.join(DEEPTOOLS_DIR, "deeptools_multiBAM.out.npz"),
     output:
-        plot = os.path.join(DEEPTOOLS_DIR, "deeptools_scatterplot.png")
+        plot=os.path.join(DEEPTOOLS_DIR, "deeptools_scatterplot.png"),
     threads: 4
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/deeptools_correlation/scatterplot.log"
+        "logs/deeptools_correlation/scatterplot.log",
     shell:
         """
         plotCorrelation --corData {input.npz} \
@@ -172,15 +190,15 @@ rule deeptools_cor_scatterplot:
 
 rule deeptools_cor_heatmap:
     input:
-        npz = os.path.join(DEEPTOOLS_DIR, "deeptools_multiBAM.out.npz")
+        npz=os.path.join(DEEPTOOLS_DIR, "deeptools_multiBAM.out.npz"),
     output:
-        plot = os.path.join(DEEPTOOLS_DIR, "deeptools_heatmap.png"),
-        cormat = os.path.join(DEEPTOOLS_DIR, "correlation_matrix.tab")
+        plot=os.path.join(DEEPTOOLS_DIR, "deeptools_heatmap.png"),
+        cormat=os.path.join(DEEPTOOLS_DIR, "correlation_matrix.tab"),
     threads: 4
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/deeptools_correlation/heatmap.log"
+        "logs/deeptools_correlation/heatmap.log",
     shell:
         """
         plotCorrelation --corData {input.npz} \
@@ -197,15 +215,15 @@ rule deeptools_cor_heatmap:
 
 rule deeptools_cor_pca:
     input:
-        npz = os.path.join(DEEPTOOLS_DIR, "deeptools_multiBAM.out.npz")
+        npz=os.path.join(DEEPTOOLS_DIR, "deeptools_multiBAM.out.npz"),
     output:
-        plot = os.path.join(DEEPTOOLS_DIR, "deeptools_PCA.png"),
-        data = os.path.join(DEEPTOOLS_DIR, "deeptools_PCA.tab")
+        plot=os.path.join(DEEPTOOLS_DIR, "deeptools_PCA.png"),
+        data=os.path.join(DEEPTOOLS_DIR, "deeptools_PCA.tab"),
     threads: 4
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/deeptools_correlation/pca.log"
+        "logs/deeptools_correlation/pca.log",
     shell:
         """
         plotPCA --corData {input.npz} \
@@ -220,16 +238,16 @@ rule deeptools_cor_pca:
 # 5. GC bias
 rule deeptools_gc_bias:
     input:
-        bam = os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"),
-        genome = GENOME_2BIT
+        bam=os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"),
+        genome=GENOME_2BIT,
     output:
-        freq = os.path.join(DEEPTOOLS_DIR, "{sample}.gc_content.txt"),
-        plot = os.path.join(DEEPTOOLS_DIR, "{sample}.gc_content.png")
+        freq=os.path.join(DEEPTOOLS_DIR, "{sample}.gc_content.txt"),
+        plot=os.path.join(DEEPTOOLS_DIR, "{sample}.gc_content.png"),
     threads: 8
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/deeptools_gc_bias/{sample}.log"
+        "logs/deeptools_gc_bias/{sample}.log",
     shell:
         """
         mkdir -p {DEEPTOOLS_DIR} logs/deeptools_gc_bias
@@ -247,18 +265,18 @@ rule deeptools_gc_bias:
 #    pipeline's RPGC bigWigs instead of regenerating them).
 rule deeptools_tss:
     input:
-        bigwigs = expand(os.path.join(BIGWIG_DIR, "{sample}.bw"), sample=SAMPLES),
-        gtf = GTF_FILE
+        bigwigs=expand(os.path.join(BIGWIG_DIR, "{sample}.bw"), sample=SAMPLES),
+        gtf=GTF_FILE,
     output:
-        matrix = os.path.join(DEEPTOOLS_DIR, "matrix.mat.gz"),
-        heatmap = os.path.join(DEEPTOOLS_DIR, "Heatmap_TSS.png"),
-        profile = os.path.join(DEEPTOOLS_DIR, "Profile_TSS.png"),
-        profiledata = os.path.join(DEEPTOOLS_DIR, "Profile_TSS.data.tab")
+        matrix=os.path.join(DEEPTOOLS_DIR, "matrix.mat.gz"),
+        heatmap=os.path.join(DEEPTOOLS_DIR, "Heatmap_TSS.png"),
+        profile=os.path.join(DEEPTOOLS_DIR, "Profile_TSS.png"),
+        profiledata=os.path.join(DEEPTOOLS_DIR, "Profile_TSS.data.tab"),
     threads: 16
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/deeptools_tss/tss.log"
+        "logs/deeptools_tss/tss.log",
     shell:
         """
         mkdir -p {DEEPTOOLS_DIR} logs/deeptools_tss
@@ -291,15 +309,15 @@ rule deeptools_tss:
 #     canvas heatmap; reuses the existing matrix.mat.gz (no computeMatrix rerun).
 rule deeptools_tss_heatmap_downsample:
     input:
-        matrix = os.path.join(DEEPTOOLS_DIR, "matrix.mat.gz"),
+        matrix=os.path.join(DEEPTOOLS_DIR, "matrix.mat.gz"),
         # declared so edits to the script invalidate its outputs
-        script = "workflow/scripts/downsample_tss_matrix.py",
+        script="workflow/scripts/downsample_tss_matrix.py",
     output:
-        json = os.path.join(DEEPTOOLS_DIR, "tss_heatmap_downsampled.json")
+        json=os.path.join(DEEPTOOLS_DIR, "tss_heatmap_downsampled.json"),
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/deeptools_tss/downsample.log"
+        "logs/deeptools_tss/downsample.log",
     shell:
         """
         python workflow/scripts/downsample_tss_matrix.py {input.matrix} \
@@ -310,14 +328,14 @@ rule deeptools_tss_heatmap_downsample:
 # 7. NEW: numeric TSS enrichment score per sample (from the profile-data table)
 rule tss_enrichment_score:
     input:
-        profile = os.path.join(DEEPTOOLS_DIR, "Profile_TSS.data.tab")
+        profile=os.path.join(DEEPTOOLS_DIR, "Profile_TSS.data.tab"),
     output:
-        tsv = os.path.join(QC_DIR, "tss_enrichment_scores.tsv"),
-        mqc = os.path.join(QC_DIR, "tss_enrichment_mqc.txt")
+        tsv=os.path.join(QC_DIR, "tss_enrichment_scores.tsv"),
+        mqc=os.path.join(QC_DIR, "tss_enrichment_mqc.txt"),
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/tss_enrichment_score/tss.log"
+        "logs/tss_enrichment_score/tss.log",
     script:
         "../scripts/tss_score.py"
 
@@ -325,16 +343,16 @@ rule tss_enrichment_score:
 # 8. FRiP (fraction of reads in peaks) per sample
 rule FRiP:
     input:
-        bamfile = os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"),
-        peakfile = os.path.join(PEAK_DIR, "{sample}_peaks.{condition}")
+        bamfile=os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"),
+        peakfile=os.path.join(PEAK_DIR, "{sample}_peaks.{condition}"),
     output:
-        fripfile = os.path.join(FRIP_DIR, "{sample}.{condition}.frip.txt")
+        fripfile=os.path.join(FRIP_DIR, "{sample}.{condition}.frip.txt"),
     conda:
         "../envs/bedtools.yaml"
     wildcard_constraints:
-        condition = "narrowPeak|broadPeak"
+        condition="narrowPeak|broadPeak",
     log:
-        "logs/FRiP/{sample}.{condition}.log"
+        "logs/FRiP/{sample}.{condition}.log",
     shell:
         """
         mkdir -p {FRIP_DIR} logs/FRiP
@@ -348,19 +366,19 @@ rule FRiP:
 # 9. NEW: relaxed MACS2 calls for IDR (IDR expects relaxed peaks, not the -q0.05 set)
 rule qc_relaxed_peaks:
     input:
-        bam = os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam")
+        bam=os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"),
     output:
-        peaks = os.path.join(RELAXED_DIR, "{sample}_relaxed.narrowPeak")
+        peaks=os.path.join(RELAXED_DIR, "{sample}_relaxed.narrowPeak"),
     params:
-        outdir = RELAXED_DIR,
-        name = "{sample}",
-        genome = config["macs2_genome"],
-        pvalue = config["idr_relaxed_pvalue"],
-        top_n = config["idr_top_n_peaks"]
+        outdir=RELAXED_DIR,
+        name="{sample}",
+        genome=config["macs2_genome"],
+        pvalue=config["idr_relaxed_pvalue"],
+        top_n=config["idr_top_n_peaks"],
     conda:
         "../envs/macs2.yaml"
     log:
-        "logs/qc_relaxed_peaks/{sample}.log"
+        "logs/qc_relaxed_peaks/{sample}.log",
     shell:
         """
         mkdir -p {params.outdir} logs/qc_relaxed_peaks
@@ -380,16 +398,18 @@ rule qc_relaxed_peaks:
 # 10. IDR on within-condition replicate pairs (relaxed peaks)
 rule idr:
     input:
-        rep1 = lambda w: os.path.join(RELAXED_DIR, f"{w.rep1}_relaxed.{w.condition}"),
-        rep2 = lambda w: os.path.join(RELAXED_DIR, f"{w.rep2}_relaxed.{w.condition}")
+        rep1=lambda w: os.path.join(RELAXED_DIR, f"{w.rep1}_relaxed.{w.condition}"),
+        rep2=lambda w: os.path.join(RELAXED_DIR, f"{w.rep2}_relaxed.{w.condition}"),
     output:
-        peaks = os.path.join(IDR_DIR, "{group}--{rep1}--{rep2}--idr_peaks.{condition}.txt")
+        peaks=os.path.join(
+            IDR_DIR, "{group}--{rep1}--{rep2}--idr_peaks.{condition}.txt"
+        ),
     conda:
         "../envs/idr.yaml"
     wildcard_constraints:
-        condition = "narrowPeak|broadPeak"
+        condition="narrowPeak|broadPeak",
     log:
-        "logs/idr/{group}--{rep1}--{rep2}--idr_{condition}.log"
+        "logs/idr/{group}--{rep1}--{rep2}--idr_{condition}.log",
     shell:
         """
         mkdir -p {IDR_DIR} logs/idr
@@ -405,17 +425,17 @@ rule idr:
 # 11. Library complexity (NRF / PBC1 / PBC2) on the pre-dedup filtered BAM
 rule calculate_library_complexity:
     input:
-        bam = os.path.join(FILTERED_DIR, "{sample}.sorted.filtered.bam")
+        bam=os.path.join(FILTERED_DIR, "{sample}.sorted.filtered.bam"),
     output:
-        txt = os.path.join(COMPLEXITY_DIR, "{sample}_complexity.txt")
+        txt=os.path.join(COMPLEXITY_DIR, "{sample}_complexity.txt"),
     conda:
         "../envs/bedtools.yaml"  # needs samtools, bedtools, bc
     threads: 8
     log:
-        "logs/library_complexity/{sample}.log"
+        "logs/library_complexity/{sample}.log",
     params:
-        temp_dir = os.path.join(TMP_DIR, "{sample}_complexity"),
-        tmp = os.path.join(TMP_DIR, "{sample}_complexity.bed")
+        temp_dir=os.path.join(TMP_DIR, "{sample}_complexity"),
+        tmp=os.path.join(TMP_DIR, "{sample}_complexity.bed"),
     shell:
         """
         mkdir -p {COMPLEXITY_DIR} logs/library_complexity {params.temp_dir}
@@ -500,21 +520,24 @@ rule calculate_library_complexity:
 # 12. NEW: spike-in QC — % reads on the spike-in genome vs the Active Motif target
 rule spikein_qc:
     input:
-        spikein = expand(os.path.join(SPIKEIN_COUNT_DIR, "{sample}.spikein_count.txt"), sample=SAMPLES),
-        bams = expand(os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"), sample=SAMPLES)
+        spikein=expand(
+            os.path.join(SPIKEIN_COUNT_DIR, "{sample}.spikein_count.txt"),
+            sample=SAMPLES,
+        ),
+        bams=expand(os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"), sample=SAMPLES),
     output:
-        tsv = os.path.join(SPIKEIN_QC_DIR, "spikein_fraction.tsv"),
-        mqc = os.path.join(SPIKEIN_QC_DIR, "spikein_fraction_mqc.txt")
+        tsv=os.path.join(SPIKEIN_QC_DIR, "spikein_fraction.tsv"),
+        mqc=os.path.join(SPIKEIN_QC_DIR, "spikein_fraction_mqc.txt"),
     params:
-        samples = SAMPLES,
-        bamdir = RMD_BAM_DIR,
-        cntdir = SPIKEIN_COUNT_DIR,
-        lo = config["spikein_pct_min"],
-        hi = config["spikein_pct_max"]
+        samples=SAMPLES,
+        bamdir=RMD_BAM_DIR,
+        cntdir=SPIKEIN_COUNT_DIR,
+        lo=config["spikein_pct_min"],
+        hi=config["spikein_pct_max"],
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/spikein_qc/spikein_qc.log"
+        "logs/spikein_qc/spikein_qc.log",
     shell:
         """
         mkdir -p {SPIKEIN_QC_DIR} logs/spikein_qc
@@ -535,19 +558,19 @@ rule spikein_qc:
 # 13. NEW: reads in promoters vs enhancers (signal distribution)
 rule reads_in_annotations:
     input:
-        bams = expand(os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"), sample=SAMPLES),
-        promoter = PROMOTER_BED,
-        enhancer = ENHANCER_BED
+        bams=expand(os.path.join(RMD_BAM_DIR, "{sample}.nobl.bam"), sample=SAMPLES),
+        promoter=PROMOTER_BED,
+        enhancer=ENHANCER_BED,
     output:
-        tsv = os.path.join(ANNOT_DIR, "reads_in_annotations.tsv"),
-        mqc = os.path.join(ANNOT_DIR, "reads_in_annotations_mqc.txt")
+        tsv=os.path.join(ANNOT_DIR, "reads_in_annotations.tsv"),
+        mqc=os.path.join(ANNOT_DIR, "reads_in_annotations_mqc.txt"),
     params:
-        samples = SAMPLES,
-        bamdir = RMD_BAM_DIR
+        samples=SAMPLES,
+        bamdir=RMD_BAM_DIR,
     conda:
         "../envs/bedtools.yaml"
     log:
-        "logs/reads_in_annotations/annot.log"
+        "logs/reads_in_annotations/annot.log",
     shell:
         """
         mkdir -p {ANNOT_DIR} logs/reads_in_annotations
@@ -569,19 +592,23 @@ rule reads_in_annotations:
 # 14. NEW: peak count / width summary + FRiP, per sample
 rule peak_summary:
     input:
-        peaks = expand(os.path.join(PEAK_DIR, "{sample}_peaks.narrowPeak"), sample=SAMPLES),
-        frips = expand(os.path.join(FRIP_DIR, "{sample}.narrowPeak.frip.txt"), sample=SAMPLES)
+        peaks=expand(
+            os.path.join(PEAK_DIR, "{sample}_peaks.narrowPeak"), sample=SAMPLES
+        ),
+        frips=expand(
+            os.path.join(FRIP_DIR, "{sample}.narrowPeak.frip.txt"), sample=SAMPLES
+        ),
     output:
-        tsv = os.path.join(QC_DIR, "peak_summary.tsv"),
-        mqc = os.path.join(QC_DIR, "peak_summary_mqc.txt")
+        tsv=os.path.join(QC_DIR, "peak_summary.tsv"),
+        mqc=os.path.join(QC_DIR, "peak_summary_mqc.txt"),
     params:
-        samples = SAMPLES,
-        peakdir = PEAK_DIR,
-        fripdir = FRIP_DIR
+        samples=SAMPLES,
+        peakdir=PEAK_DIR,
+        fripdir=FRIP_DIR,
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/peak_summary/peak_summary.log"
+        "logs/peak_summary/peak_summary.log",
     shell:
         """
         mkdir -p {QC_DIR} logs/peak_summary
@@ -604,13 +631,13 @@ rule peak_summary:
 rule multiqc_fastqc:
     input:
         expand(os.path.join(FASTQC_DIR, "{sample}_R1_001_fastqc.html"), sample=SAMPLES),
-        expand(os.path.join(FASTQC_DIR, "{sample}_R2_001_fastqc.html"), sample=SAMPLES)
+        expand(os.path.join(FASTQC_DIR, "{sample}_R2_001_fastqc.html"), sample=SAMPLES),
     output:
-        html = os.path.join(QC_DIR, "multiqc_fastqc.html")
+        html=os.path.join(QC_DIR, "multiqc_fastqc.html"),
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/multiqc_fastqc/multiqc.log"
+        "logs/multiqc_fastqc/multiqc.log",
     shell:
         """
         mkdir -p {QC_DIR} logs/multiqc_fastqc
@@ -650,16 +677,16 @@ rule qc_report:
         os.path.join(DEEPTOOLS_DIR, "tss_heatmap_downsampled.json"),
         # declared so edits to the script invalidate its outputs
         # (keyword must follow the positional inputs above)
-        script = "workflow/scripts/build_qc_report.py",
+        script="workflow/scripts/build_qc_report.py",
     output:
-        html = os.path.join(QC_DIR, "atacseq_qc_report.html")
+        html=os.path.join(QC_DIR, "atacseq_qc_report.html"),
     params:
-        results = RESULT_DIR,
-        samples = ",".join(SAMPLES),
+        results=RESULT_DIR,
+        samples=",".join(SAMPLES),
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/qc_report/qc_report.log"
+        "logs/qc_report/qc_report.log",
     shell:
         """
         mkdir -p {QC_DIR} logs/qc_report

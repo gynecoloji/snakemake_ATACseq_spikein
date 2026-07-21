@@ -5,6 +5,7 @@
 # Shared config, samples, directory constants and helper functions live in
 # common.smk (included first by workflow/Snakefile).
 
+
 # Aggregate target for the primary pipeline. Run it alone with:
 #   snakemake --use-conda --cores N atacseq_all
 rule atacseq_all:
@@ -12,81 +13,74 @@ rule atacseq_all:
         # FastQC reports
         expand(f"{FASTQC_DIR}/{{sample}}_R1_001_fastqc.html", sample=SAMPLES),
         expand(f"{FASTQC_DIR}/{{sample}}_R2_001_fastqc.html", sample=SAMPLES),
-        
         # Fastp reports and trimmed reads
         expand(f"{FASTP_DIR}/{{sample}}.html", sample=SAMPLES),
         expand(f"{FASTP_DIR}/{{sample}}.json", sample=SAMPLES),
-
         # Raw alignment BAM (full combined-genome alignment: all reads + all tags)
         expand(f"{ALIGN_DIR}/{{sample}}.bam", sample=SAMPLES),
-
         # Filtered BAM files
         expand(f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam", sample=SAMPLES),
         expand(f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam.bai", sample=SAMPLES),
-        
         # Deduplicated BAM files
         expand(f"{DEDUP_DIR}/{{sample}}.dedup.bam", sample=SAMPLES),
         expand(f"{DEDUP_DIR}/{{sample}}.dedup.metrics.txt", sample=SAMPLES),
-        
         # Blacklist filtered BAM files
         expand(f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam", sample=SAMPLES),
         expand(f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai", sample=SAMPLES),
-        
         # Peak calling results (with blacklist filtering)
         expand(f"{PEAKS_DIR}/{{sample}}_peaks.narrowPeak", sample=SAMPLES),
-        
         # Blacklist filtering statistics
         f"{QC_DIR}/blacklist_filtering_stats.txt",
-
         # ── Module A: spike-in normalization ──
         expand(f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.bam", sample=SAMPLES),
         expand(f"{SPIKEIN_COUNT_DIR}/{{sample}}.spikein_count.txt", sample=SAMPLES),
         f"{SPIKEIN_DIR}/normalization_factors.tsv",
         expand(f"{BIGWIG_DIR}/{{sample}}.bw", sample=SAMPLES),
         expand(f"{SPIKEIN_BIGWIG_DIR}/{{sample}}.spikein.bw", sample=SAMPLES),
-
         # ── Module B: consensus peaks + fragment counts ──
         f"{CONSENSUS_DIR}/consensus_peaks.bed",
-        f"{CONSENSUS_DIR}/consensus_counts.txt"
+        f"{CONSENSUS_DIR}/consensus_counts.txt",
+
 
 # FastQC on raw reads
 rule fastqc:
     input:
-        r1 = "data/{sample}_R1_001.fastq.gz",
-        r2 = "data/{sample}_R2_001.fastq.gz"
+        r1="data/{sample}_R1_001.fastq.gz",
+        r2="data/{sample}_R2_001.fastq.gz",
     output:
-        r1_html = f"{FASTQC_DIR}/{{sample}}_R1_001_fastqc.html",
-        r2_html = f"{FASTQC_DIR}/{{sample}}_R2_001_fastqc.html"
+        r1_html=f"{FASTQC_DIR}/{{sample}}_R1_001_fastqc.html",
+        r2_html=f"{FASTQC_DIR}/{{sample}}_R2_001_fastqc.html",
     params:
-        outdir = FASTQC_DIR
+        outdir=FASTQC_DIR,
     threads: 2
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/fastqc/{sample}.log"
+        "logs/fastqc/{sample}.log",
     shell:
         """
         mkdir -p {params.outdir}
         fastqc -t {threads} -o {params.outdir} {input.r1} {input.r2} > {log} 2>&1
         """
 
+
 # Fastp for read trimming and quality filtering
 rule fastp:
     input:
-        r1 = "data/{sample}_R1_001.fastq.gz",
-        r2 = "data/{sample}_R2_001.fastq.gz"
+        r1="data/{sample}_R1_001.fastq.gz",
+        r2="data/{sample}_R2_001.fastq.gz",
     output:
-        r1 = f"{FASTP_DIR}/{{sample}}_R1.trimmed.fastq.gz",
-        r2 = f"{FASTP_DIR}/{{sample}}_R2.trimmed.fastq.gz",
-        html = f"{FASTP_DIR}/{{sample}}.html",
-        json = f"{FASTP_DIR}/{{sample}}.json"
+        r1=f"{FASTP_DIR}/{{sample}}_R1.trimmed.fastq.gz",
+        r2=f"{FASTP_DIR}/{{sample}}_R2.trimmed.fastq.gz",
+        html=f"{FASTP_DIR}/{{sample}}.html",
+        json=f"{FASTP_DIR}/{{sample}}.json",
     threads: 16
     conda:
         "../envs/snakemake.yaml"
     params:
-        adapter_args = FASTP_ADAPTER_ARGS
+        adapter_args=FASTP_ADAPTER_ARGS,
     log:
-        "logs/fastp/{sample}.log"
+        "logs/fastp/{sample}.log",
     shell:
         """
         mkdir -p {FASTP_DIR}
@@ -100,20 +94,21 @@ rule fastp:
               --length_required 30 -p --cut_front --cut_tail --cut_window_size 4 --cut_mean_quality 20 > {log} 2>&1
         """
 
+
 # Align reads with Bowtie2 to the COMBINED (human + spike-in) index; reads are
 # split by chrom prefix downstream. The human FASTA must be chr-prefixed (UCSC)
 # since Bowtie2 has no --add-chrname: blacklist/promoter/MACS2 expect chr1..chrX.
 rule bowtie2_align:
     input:
-        r1   = f"{FASTP_DIR}/{{sample}}_R1.trimmed.fastq.gz",
-        r2   = f"{FASTP_DIR}/{{sample}}_R2.trimmed.fastq.gz",
-        done = f"{config['combined_index']}.build.done"
+        r1=f"{FASTP_DIR}/{{sample}}_R1.trimmed.fastq.gz",
+        r2=f"{FASTP_DIR}/{{sample}}_R2.trimmed.fastq.gz",
+        done=f"{config['combined_index']}.build.done",
     output:
-        bam = f"{ALIGN_DIR}/{{sample}}.bam",
-        bai = f"{ALIGN_DIR}/{{sample}}.bam.bai",
-        summary = f"{ALIGN_DIR}/{{sample}}.bowtie2.log"
+        bam=f"{ALIGN_DIR}/{{sample}}.bam",
+        bai=f"{ALIGN_DIR}/{{sample}}.bam.bai",
+        summary=f"{ALIGN_DIR}/{{sample}}.bowtie2.log",
     params:
-        index = config["combined_index"]
+        index=config["combined_index"],
     threads: 20
     conda:
         "../envs/snakemake.yaml"
@@ -130,26 +125,27 @@ rule bowtie2_align:
         samtools index -@ {threads} {output.bam}
         """
 
+
 # Filter (Bowtie2): properly-paired + unique HUMAN reads, drop filtering-orphaned
 # mates, record per-chrom idxstats (mito-% QC), then keep only the analysis chroms
 # (drop chrM/chrY/non-primary). Mirrors the CUT&RUN filter + ENCODE mito removal.
 rule samtools_sort_filter_index:
     input:
         # named because `script` below makes a bare {input} expand to both paths
-        bam    = f"{ALIGN_DIR}/{{sample}}.bam",
+        bam=f"{ALIGN_DIR}/{{sample}}.bam",
         # declared so edits to the script invalidate its outputs
-        script = "workflow/scripts/process_sam.py",
+        script="workflow/scripts/process_sam.py",
     output:
-        bam = f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam",
-        bai = f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam.bai",
-        flagstat = f"{FILTERED_DIR}/{{sample}}_summary.txt",
-        idxstats = f"{FILTERED_DIR}/{{sample}}.idxstats.txt"
+        bam=f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam",
+        bai=f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam.bai",
+        flagstat=f"{FILTERED_DIR}/{{sample}}_summary.txt",
+        idxstats=f"{FILTERED_DIR}/{{sample}}.idxstats.txt",
     params:
-        spikein_prefix = config["spikein_prefix"],
-        keep_chroms    = config["keep_chroms"],
-        prekeep        = f"{TMP_DIR}/{{sample}}.prekeep.bam"
+        spikein_prefix=config["spikein_prefix"],
+        keep_chroms=config["keep_chroms"],
+        prekeep=f"{TMP_DIR}/{{sample}}.prekeep.bam",
     log:
-        "logs/samtools/{sample}.log"
+        "logs/samtools/{sample}.log",
     threads: 20
     conda:
         "../envs/snakemake.yaml"
@@ -191,18 +187,19 @@ rule samtools_sort_filter_index:
               {params.prekeep} {params.prekeep}.bai
         """
 
+
 # Remove duplicates with Picard
 rule remove_duplicates:
     input:
-        filtered_bam = f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam"
+        filtered_bam=f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam",
     output:
-        dedup_bam = f"{DEDUP_DIR}/{{sample}}.dedup.bam",
-        metrics = f"{DEDUP_DIR}/{{sample}}.dedup.metrics.txt"
+        dedup_bam=f"{DEDUP_DIR}/{{sample}}.dedup.bam",
+        metrics=f"{DEDUP_DIR}/{{sample}}.dedup.metrics.txt",
     threads: 4
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/dedup/{sample}.log"
+        "logs/dedup/{sample}.log",
     shell:
         """
         mkdir -p {DEDUP_DIR}
@@ -217,29 +214,30 @@ rule remove_duplicates:
         samtools index {output.dedup_bam}
         """
 
+
 # Filter against blacklist regions
 rule filter_blacklist:
     priority: 10
     input:
-        bam = f"{DEDUP_DIR}/{{sample}}.dedup.bam",
-        blacklist = config["blacklist"]
+        bam=f"{DEDUP_DIR}/{{sample}}.dedup.bam",
+        blacklist=config["blacklist"],
     output:
-        filtered_bam = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
-        filtered_bai = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai",
-        excluded_reads = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.blacklisted.bam"
+        filtered_bam=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
+        filtered_bai=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai",
+        excluded_reads=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.blacklisted.bam",
     params:
-        temp_bedpe = f"{TMP_DIR}/{{sample}}.fragments.bedpe",
-        temp_fragment_bed = f"{TMP_DIR}/{{sample}}.fragments.bed",
-        temp_blacklist_fragments = f"{TMP_DIR}/{{sample}}.blacklisted.fragments.bed",
-        temp_blacklist_ids = f"{TMP_DIR}/{{sample}}.blacklisted.ids.txt",
-        temp_namesorted_bam = f"{TMP_DIR}/{{sample}}.namesorted.bam",
-        temp_filtered_bam = f"{TMP_DIR}/{{sample}}.filtered.bam",
-        temp_excluded_bam = f"{TMP_DIR}/{{sample}}.excluded.bam"
+        temp_bedpe=f"{TMP_DIR}/{{sample}}.fragments.bedpe",
+        temp_fragment_bed=f"{TMP_DIR}/{{sample}}.fragments.bed",
+        temp_blacklist_fragments=f"{TMP_DIR}/{{sample}}.blacklisted.fragments.bed",
+        temp_blacklist_ids=f"{TMP_DIR}/{{sample}}.blacklisted.ids.txt",
+        temp_namesorted_bam=f"{TMP_DIR}/{{sample}}.namesorted.bam",
+        temp_filtered_bam=f"{TMP_DIR}/{{sample}}.filtered.bam",
+        temp_excluded_bam=f"{TMP_DIR}/{{sample}}.excluded.bam",
     threads: 8
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/blacklist_filter/{sample}.log"
+        "logs/blacklist_filter/{sample}.log",
     shell:
         """
         mkdir -p {BLACKLIST_FILTERED_DIR} {TMP_DIR}
@@ -293,20 +291,21 @@ rule filter_blacklist:
             {params.temp_blacklist_ids} {params.temp_namesorted_bam} {params.temp_filtered_bam} \
             {params.temp_excluded_bam}
         """
-        
+
+
 # Call peaks with MACS2 (without input control) - now using blacklist filtered BAM
 rule call_peaks:
     input:
-        treatment = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam"
+        treatment=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
     output:
-        peaks = f"{PEAKS_DIR}/{{sample}}_peaks.narrowPeak"
+        peaks=f"{PEAKS_DIR}/{{sample}}_peaks.narrowPeak",
     params:
-        outdir = PEAKS_DIR,
-        name = "{sample}"
+        outdir=PEAKS_DIR,
+        name="{sample}",
     conda:
         "../envs/macs2.yaml"
     log:
-        "logs/macs2/{sample}.log"
+        "logs/macs2/{sample}.log",
     shell:
         """
         mkdir -p {params.outdir}
@@ -320,28 +319,29 @@ rule call_peaks:
               -q 0.05 > {log} 2>&1
         """
 
+
 # ── Module A: build the COMBINED (human + prefixed spike-in) index (once) ──
 # Optionally restrict the human genome to `align_chroms`, then prefix the spike-in
 # chrom names (e.g. >chr2L -> >spikein_chr2L) so they can't collide with human and
 # can be split out after alignment; concatenate and build one bowtie2 index.
 rule build_combined_genome:
     input:
-        human   = config["human_fasta"],
-        spikein = config["spikein_fasta"]
+        human=config["human_fasta"],
+        spikein=config["spikein_fasta"],
     output:
-        combined_fa = temp(f"{config['combined_index']}.fa"),
-        done        = touch(f"{config['combined_index']}.build.done")
+        combined_fa=temp(f"{config['combined_index']}.fa"),
+        done=touch(f"{config['combined_index']}.build.done"),
     params:
-        prefix       = config["spikein_prefix"],
-        index        = config["combined_index"],
-        chroms       = config["align_chroms"],
-        renamed      = f"{config['combined_index']}.spikein.renamed.fa",
-        human_subset = f"{config['combined_index']}.human.subset.fa"
+        prefix=config["spikein_prefix"],
+        index=config["combined_index"],
+        chroms=config["align_chroms"],
+        renamed=f"{config['combined_index']}.spikein.renamed.fa",
+        human_subset=f"{config['combined_index']}.human.subset.fa",
     threads: 8
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/build_combined_genome/build.log"
+        "logs/build_combined_genome/build.log",
     shell:
         """
         mkdir -p $(dirname {params.index}) logs/build_combined_genome
@@ -360,28 +360,29 @@ rule build_combined_genome:
         if [ -n "{params.chroms}" ]; then rm -f {params.human_subset}; fi
         """
 
+
 # ── Module A: extract + count spike-in reads from the combined alignment ──
 # Reads whose RNAME starts with the spike-in prefix are the spike-in fraction;
 # dedup and count them to derive the normalization factor.
 rule spikein_extract_count:
     input:
-        sam = f"{ALIGN_DIR}/{{sample}}.bam",
+        sam=f"{ALIGN_DIR}/{{sample}}.bam",
         # declared so edits to the script invalidate its outputs
-        script = "workflow/scripts/process_sam.py",
+        script="workflow/scripts/process_sam.py",
     output:
-        bam      = f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.bam",
-        bai      = f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.bam.bai",
-        metrics   = f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.dedup.metrics.txt",
-        count_txt = f"{SPIKEIN_COUNT_DIR}/{{sample}}.spikein_count.txt",
-        flagstat  = f"{SPIKEIN_COUNT_DIR}/{{sample}}.spikein_flagstat.txt"
+        bam=f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.bam",
+        bai=f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.bam.bai",
+        metrics=f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.dedup.metrics.txt",
+        count_txt=f"{SPIKEIN_COUNT_DIR}/{{sample}}.spikein_count.txt",
+        flagstat=f"{SPIKEIN_COUNT_DIR}/{{sample}}.spikein_flagstat.txt",
     params:
-        prefix     = config["spikein_prefix"],
-        tmp_sorted = f"{TMP_DIR}/{{sample}}.spikein.sorted.bam"
+        prefix=config["spikein_prefix"],
+        tmp_sorted=f"{TMP_DIR}/{{sample}}.spikein.sorted.bam",
     threads: 8
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/spikein_extract_count/{sample}.log"
+        "logs/spikein_extract_count/{sample}.log",
     shell:
         """
         mkdir -p {SPIKEIN_ALIGN_DIR} {SPIKEIN_COUNT_DIR} {TMP_DIR} logs/spikein_extract_count
@@ -415,35 +416,39 @@ rule spikein_extract_count:
               {TMP_DIR}/temp_{wildcards.sample}.spikein.uc.unsorted.sam
         """
 
+
 # ── Module A: aggregate counts -> normalization factors ─────────────────
 rule compute_spikein_factors:
     input:
-        counts = expand(f"{SPIKEIN_COUNT_DIR}/{{sample}}.spikein_count.txt", sample=SAMPLES)
+        counts=expand(
+            f"{SPIKEIN_COUNT_DIR}/{{sample}}.spikein_count.txt", sample=SAMPLES
+        ),
     output:
-        table = f"{SPIKEIN_DIR}/normalization_factors.tsv"
+        table=f"{SPIKEIN_DIR}/normalization_factors.tsv",
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/spikein_factors/summary.log"
+        "logs/spikein_factors/summary.log",
     script:
         "../scripts/compute_spikein_factors.py"
+
 
 # ── Module A: depth-normalized bigWig (before/after comparison) ─────────
 rule create_bigwig:
     input:
-        bam = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
-        bai = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai"
+        bam=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
+        bai=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai",
     output:
-        bw = f"{BIGWIG_DIR}/{{sample}}.bw"
+        bw=f"{BIGWIG_DIR}/{{sample}}.bw",
     params:
-        egs       = config["effective_genome_size"],
-        bin_size  = config["bin_size"],
-        blacklist = config["blacklist"]
+        egs=config["effective_genome_size"],
+        bin_size=config["bin_size"],
+        blacklist=config["blacklist"],
     threads: 8
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/bigwig/{sample}.log"
+        "logs/bigwig/{sample}.log",
     shell:
         """
         mkdir -p {BIGWIG_DIR} logs/bigwig
@@ -457,22 +462,23 @@ rule create_bigwig:
             --outFileName {output.bw} > {log} 2>&1
         """
 
+
 # ── Module A: spike-in-scaled bigWig (NF from the factor table) ─────────
 rule create_spikein_bigwig:
     input:
-        bam     = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
-        bai     = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai",
-        factors = f"{SPIKEIN_DIR}/normalization_factors.tsv"
+        bam=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
+        bai=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai",
+        factors=f"{SPIKEIN_DIR}/normalization_factors.tsv",
     output:
-        bw = f"{SPIKEIN_BIGWIG_DIR}/{{sample}}.spikein.bw"
+        bw=f"{SPIKEIN_BIGWIG_DIR}/{{sample}}.spikein.bw",
     params:
-        bin_size  = config["bin_size"],
-        blacklist = config["blacklist"]
+        bin_size=config["bin_size"],
+        blacklist=config["blacklist"],
     threads: 8
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/spikein_bigwig/{sample}.log"
+        "logs/spikein_bigwig/{sample}.log",
     shell:
         """
         mkdir -p {SPIKEIN_BIGWIG_DIR} logs/spikein_bigwig
@@ -490,24 +496,25 @@ rule create_spikein_bigwig:
             --outFileName {output.bw} > {log} 2>&1
         """
 
+
 # ── Module B: relaxed MACS2 calls for IDR (2-replicate conditions only) ─
 rule relaxed_peaks:
     wildcard_constraints:
-        sample = _alt(IDR_SAMPLES)
+        sample=_alt(IDR_SAMPLES),
     input:
-        bam = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam"
+        bam=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
     output:
-        peaks = f"{RELAXED_PEAKS_DIR}/{{sample}}_relaxed.narrowPeak"
+        peaks=f"{RELAXED_PEAKS_DIR}/{{sample}}_relaxed.narrowPeak",
     params:
-        outdir = RELAXED_PEAKS_DIR,
-        name   = "{sample}",
-        genome = config["macs2_genome"],
-        pvalue = config["idr_relaxed_pvalue"],
-        top_n  = config["idr_top_n_peaks"]
+        outdir=RELAXED_PEAKS_DIR,
+        name="{sample}",
+        genome=config["macs2_genome"],
+        pvalue=config["idr_relaxed_pvalue"],
+        top_n=config["idr_top_n_peaks"],
     conda:
         "../envs/macs2.yaml"
     log:
-        "logs/relaxed_peaks/{sample}.log"
+        "logs/relaxed_peaks/{sample}.log",
     shell:
         """
         mkdir -p {params.outdir} logs/relaxed_peaks
@@ -526,22 +533,23 @@ rule relaxed_peaks:
               {params.outdir}/{params.name}_relaxedtmp_sorted.narrowPeak
         """
 
+
 # ── Module B: IDR reproducibility (exactly 2-replicate conditions) ──────
 # _group_relaxed_inputs() is defined in common.smk.
 rule reproducible_idr:
     wildcard_constraints:
-        group = _alt(IDR_GROUPS)
+        group=_alt(IDR_GROUPS),
     input:
-        peaks = _group_relaxed_inputs
+        peaks=_group_relaxed_inputs,
     output:
-        peaks = f"{CONSENSUS_DIR}/idr/{{group}}.idr_peaks.narrowPeak"
+        peaks=f"{CONSENSUS_DIR}/idr/{{group}}.idr_peaks.narrowPeak",
     params:
-        threshold = config["idr_threshold"],
-        idr_out   = f"{CONSENSUS_DIR}/idr/{{group}}.idr.txt"
+        threshold=config["idr_threshold"],
+        idr_out=f"{CONSENSUS_DIR}/idr/{{group}}.idr.txt",
     conda:
         "../envs/idr.yaml"
     log:
-        "logs/reproducible/{group}_idr.log"
+        "logs/reproducible/{group}_idr.log",
     shell:
         """
         mkdir -p {CONSENSUS_DIR}/idr logs/reproducible
@@ -557,44 +565,48 @@ rule reproducible_idr:
             {params.idr_out} > {output.peaks}
         """
 
+
 # ── Module B: build the fixed-width, non-overlapping consensus set ──────
 rule consensus_peaks:
     input:
-        narrowpeaks = expand(f"{PEAKS_DIR}/{{sample}}_peaks.narrowPeak", sample=SAMPLES),
-        idr         = expand(f"{CONSENSUS_DIR}/idr/{{group}}.idr_peaks.narrowPeak", group=IDR_GROUPS),
-        blacklist   = config["blacklist"]
+        narrowpeaks=expand(f"{PEAKS_DIR}/{{sample}}_peaks.narrowPeak", sample=SAMPLES),
+        idr=expand(
+            f"{CONSENSUS_DIR}/idr/{{group}}.idr_peaks.narrowPeak", group=IDR_GROUPS
+        ),
+        blacklist=config["blacklist"],
     output:
-        bed = f"{CONSENSUS_DIR}/consensus_peaks.bed",
-        saf = f"{CONSENSUS_DIR}/consensus_peaks.saf"
+        bed=f"{CONSENSUS_DIR}/consensus_peaks.bed",
+        saf=f"{CONSENSUS_DIR}/consensus_peaks.saf",
     params:
-        groups       = GROUPS,
-        group_method = GROUP_METHOD,
-        peaks_dir    = PEAKS_DIR,
-        idr_dir      = f"{CONSENSUS_DIR}/idr",
-        min_reps     = config["consensus_min_replicates"],
-        window       = config["consensus_window"],
-        keep_regex   = config["keep_chroms_regex"]
+        groups=GROUPS,
+        group_method=GROUP_METHOD,
+        peaks_dir=PEAKS_DIR,
+        idr_dir=f"{CONSENSUS_DIR}/idr",
+        min_reps=config["consensus_min_replicates"],
+        window=config["consensus_window"],
+        keep_regex=config["keep_chroms_regex"],
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/consensus/consensus.log"
+        "logs/consensus/consensus.log",
     script:
         "../scripts/consensus_peaks.py"
+
 
 # ── Module B: count fragments over the consensus set (all samples) ──────
 rule count_fragments_consensus:
     input:
-        saf  = f"{CONSENSUS_DIR}/consensus_peaks.saf",
-        bams = expand(f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam", sample=SAMPLES),
-        bais = expand(f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai", sample=SAMPLES)
+        saf=f"{CONSENSUS_DIR}/consensus_peaks.saf",
+        bams=expand(f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam", sample=SAMPLES),
+        bais=expand(f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai", sample=SAMPLES),
     output:
-        counts  = f"{CONSENSUS_DIR}/consensus_counts.txt",
-        summary = f"{CONSENSUS_DIR}/consensus_counts.txt.summary"
+        counts=f"{CONSENSUS_DIR}/consensus_counts.txt",
+        summary=f"{CONSENSUS_DIR}/consensus_counts.txt.summary",
     threads: 8
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/consensus_counts/featurecounts.log"
+        "logs/consensus_counts/featurecounts.log",
     shell:
         """
         mkdir -p {CONSENSUS_DIR} logs/consensus_counts
@@ -605,20 +617,25 @@ rule count_fragments_consensus:
             {input.bams} > {log} 2>&1
         """
 
+
 # Generate blacklist filtering statistics
 rule blacklist_stats:
     input:
-        original_bams = expand(f"{DEDUP_DIR}/{{sample}}.dedup.bam", sample=SAMPLES),
-        filtered_bams = expand(f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam", sample=SAMPLES),
-        excluded_bams = expand(f"{BLACKLIST_FILTERED_DIR}/{{sample}}.blacklisted.bam", sample=SAMPLES)
+        original_bams=expand(f"{DEDUP_DIR}/{{sample}}.dedup.bam", sample=SAMPLES),
+        filtered_bams=expand(
+            f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam", sample=SAMPLES
+        ),
+        excluded_bams=expand(
+            f"{BLACKLIST_FILTERED_DIR}/{{sample}}.blacklisted.bam", sample=SAMPLES
+        ),
     output:
-        stats = f"{QC_DIR}/blacklist_filtering_stats.txt"
+        stats=f"{QC_DIR}/blacklist_filtering_stats.txt",
     params:
-        samples = SAMPLES  # Pass sample names to the script
+        samples=SAMPLES,  # Pass sample names to the script
     threads: 1
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/blacklist_stats/summary.log"
+        "logs/blacklist_stats/summary.log",
     script:
         "../scripts/blacklist-stats-script.py"

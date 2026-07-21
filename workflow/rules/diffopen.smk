@@ -16,45 +16,45 @@
 # workflow/scripts/diffopen.R for what each mode does and its trade-off.
 rule diffopen:
     wildcard_constraints:
-        mode = "none|spikein|ctcf"
+        mode="none|spikein|ctcf",
     input:
-        unpack(_diffopen_extra_input),        # positional: must precede keywords
+        unpack(_diffopen_extra_input),  # positional: must precede keywords
         # declared so edits to the script invalidate its outputs
-        script   = "workflow/scripts/diffopen.R",
-        counts   = f"{CONSENSUS_DIR}/consensus_counts.txt",
-        samples  = config["samples_table"],
-        promoter = config["promoter_bed"],
-        enhancer = config["enhancer_bed"],
+        script="workflow/scripts/diffopen.R",
+        counts=f"{CONSENSUS_DIR}/consensus_counts.txt",
+        samples=config["samples_table"],
+        promoter=config["promoter_bed"],
+        enhancer=config["enhancer_bed"],
     output:
-        table    = f"{DIFFOPEN_DIR}/{{mode}}/differential_openness.tsv",
-        promoter = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter.tsv",
-        enhancer = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer.tsv",
+        table=f"{DIFFOPEN_DIR}/{{mode}}/differential_openness.tsv",
+        promoter=f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter.tsv",
+        enhancer=f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer.tsv",
         # pre-filtered nominal-significance subsets (n=3 -> FDR is very
         # conservative; read the direction balance of these, not their size)
-        all_p05  = f"{DIFFOPEN_DIR}/{{mode}}/differential_openness_nominal_p05.tsv",
-        all_p01  = f"{DIFFOPEN_DIR}/{{mode}}/differential_openness_nominal_p01.tsv",
-        prom_p05 = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter_nominal_p05.tsv",
-        prom_p01 = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter_nominal_p01.tsv",
-        enh_p05  = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer_nominal_p05.tsv",
-        enh_p01  = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer_nominal_p01.tsv",
-        factors  = f"{DIFFOPEN_DIR}/{{mode}}/size_factors.tsv",
-        summary  = f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt",
-        ma       = f"{DIFFOPEN_DIR}/{{mode}}/MA_plot.png",
+        all_p05=f"{DIFFOPEN_DIR}/{{mode}}/differential_openness_nominal_p05.tsv",
+        all_p01=f"{DIFFOPEN_DIR}/{{mode}}/differential_openness_nominal_p01.tsv",
+        prom_p05=f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter_nominal_p05.tsv",
+        prom_p01=f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter_nominal_p01.tsv",
+        enh_p05=f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer_nominal_p05.tsv",
+        enh_p01=f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer_nominal_p01.tsv",
+        factors=f"{DIFFOPEN_DIR}/{{mode}}/size_factors.tsv",
+        summary=f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt",
+        ma=f"{DIFFOPEN_DIR}/{{mode}}/MA_plot.png",
     params:
-        outdir    = lambda w: f"{DIFFOPEN_DIR}/{w.mode}",
-        ref_label = config.get("diffopen_ref_label", "Control"),
-        trim_k    = config.get("ctcf_trim_k", 2.5),
-        trim_iter = config.get("ctcf_trim_iter", 2),
+        outdir=lambda w: f"{DIFFOPEN_DIR}/{w.mode}",
+        ref_label=config.get("diffopen_ref_label", "Control"),
+        trim_k=config.get("ctcf_trim_k", 2.5),
+        trim_iter=config.get("ctcf_trim_iter", 2),
         # mode-specific flag, built from whichever extra input was supplied
-        extra     = lambda w, input: (
-            f"--spikein {input.spikein}" if w.mode == "spikein"
-            else f"--ctcf {input.ctcf}"  if w.mode == "ctcf"
-            else ""
+        extra=lambda w, input: (
+            f"--spikein {input.spikein}"
+            if w.mode == "spikein"
+            else f"--ctcf {input.ctcf}" if w.mode == "ctcf" else ""
         ),
     conda:
         "../envs/r-diffopen.yaml"
     log:
-        "logs/diffopen/{mode}.log"
+        "logs/diffopen/{mode}.log",
     shell:
         """
         mkdir -p {params.outdir} logs/diffopen
@@ -76,41 +76,41 @@ rule diffopen:
 rule diffopen_anchor_shape:
     input:
         # declared so edits to the script invalidate its outputs
-        script  = "workflow/scripts/spikein_anchor_shape.R",
-        counts  = f"{CONSENSUS_DIR}/consensus_counts.txt",
-        spikein = f"{SPIKEIN_DIR}/normalization_factors.tsv",
-        samples = config["samples_table"],
-        ctcf    = config.get("ctcf_bed", "ref/constitutive_ctcf_hg38.bed"),
-        promoter_bed = config["promoter_bed"],
-        enhancer_bed = config["enhancer_bed"],
+        script="workflow/scripts/spikein_anchor_shape.R",
+        counts=f"{CONSENSUS_DIR}/consensus_counts.txt",
+        spikein=f"{SPIKEIN_DIR}/normalization_factors.tsv",
+        samples=config["samples_table"],
+        ctcf=config.get("ctcf_bed", "ref/constitutive_ctcf_hg38.bed"),
+        promoter_bed=config["promoter_bed"],
+        enhancer_bed=config["enhancer_bed"],
     output:
-        table   = f"{DIFFOPEN_DIR}/anchor_shape/differential_openness.tsv",
+        table=f"{DIFFOPEN_DIR}/anchor_shape/differential_openness.tsv",
         # same promoter/enhancer split as the other modes, so the hybrid feeds
         # the identical downstream annotate/enrich/tracks rules
-        promoter = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_promoter.tsv",
-        enhancer = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_enhancer.tsv",
-        all_p05  = f"{DIFFOPEN_DIR}/anchor_shape/differential_openness_nominal_p05.tsv",
-        all_p01  = f"{DIFFOPEN_DIR}/anchor_shape/differential_openness_nominal_p01.tsv",
-        prom_p05 = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_promoter_nominal_p05.tsv",
-        prom_p01 = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_promoter_nominal_p01.tsv",
-        enh_p05  = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_enhancer_nominal_p05.tsv",
-        enh_p01  = f"{DIFFOPEN_DIR}/anchor_shape/diffopen_enhancer_nominal_p01.tsv",
-        anchors = f"{DIFFOPEN_DIR}/anchor_shape/invariant_ctcf_anchors.txt",
-        level   = f"{DIFFOPEN_DIR}/anchor_shape/spikein_level.tsv",
-        summary = f"{DIFFOPEN_DIR}/anchor_shape/run_summary.txt",
-        ma      = f"{DIFFOPEN_DIR}/anchor_shape/anchored_MA.png",
-        ecdf    = f"{DIFFOPEN_DIR}/anchor_shape/absolute_ecdf.png",
-        shape   = f"{DIFFOPEN_DIR}/anchor_shape/shape_curves.png",
+        promoter=f"{DIFFOPEN_DIR}/anchor_shape/diffopen_promoter.tsv",
+        enhancer=f"{DIFFOPEN_DIR}/anchor_shape/diffopen_enhancer.tsv",
+        all_p05=f"{DIFFOPEN_DIR}/anchor_shape/differential_openness_nominal_p05.tsv",
+        all_p01=f"{DIFFOPEN_DIR}/anchor_shape/differential_openness_nominal_p01.tsv",
+        prom_p05=f"{DIFFOPEN_DIR}/anchor_shape/diffopen_promoter_nominal_p05.tsv",
+        prom_p01=f"{DIFFOPEN_DIR}/anchor_shape/diffopen_promoter_nominal_p01.tsv",
+        enh_p05=f"{DIFFOPEN_DIR}/anchor_shape/diffopen_enhancer_nominal_p05.tsv",
+        enh_p01=f"{DIFFOPEN_DIR}/anchor_shape/diffopen_enhancer_nominal_p01.tsv",
+        anchors=f"{DIFFOPEN_DIR}/anchor_shape/invariant_ctcf_anchors.txt",
+        level=f"{DIFFOPEN_DIR}/anchor_shape/spikein_level.tsv",
+        summary=f"{DIFFOPEN_DIR}/anchor_shape/run_summary.txt",
+        ma=f"{DIFFOPEN_DIR}/anchor_shape/anchored_MA.png",
+        ecdf=f"{DIFFOPEN_DIR}/anchor_shape/absolute_ecdf.png",
+        shape=f"{DIFFOPEN_DIR}/anchor_shape/shape_curves.png",
     params:
-        outdir    = f"{DIFFOPEN_DIR}/anchor_shape",
-        ref_label = config.get("diffopen_ref_label", "Control"),
-        span      = config.get("anchor_shape_span", 0.6),
-        trim_k    = config.get("anchor_shape_trim_k", 2.5),
-        iter      = config.get("anchor_shape_iter", 2),
+        outdir=f"{DIFFOPEN_DIR}/anchor_shape",
+        ref_label=config.get("diffopen_ref_label", "Control"),
+        span=config.get("anchor_shape_span", 0.6),
+        trim_k=config.get("anchor_shape_trim_k", 2.5),
+        iter=config.get("anchor_shape_iter", 2),
     conda:
         "../envs/r-diffopen.yaml"
     log:
-        "logs/diffopen/anchor_shape.log"
+        "logs/diffopen/anchor_shape.log",
     shell:
         """
         mkdir -p {params.outdir} logs/diffopen
@@ -139,10 +139,10 @@ rule diffopen_anchor_shape:
 rule diffopen_gene_models:
     input:
         # declared so edits to the script invalidate its outputs
-        script  = "workflow/scripts/diffopen_annotate.R",
-        gtf = config["gtf"],
+        script="workflow/scripts/diffopen_annotate.R",
+        gtf=config["gtf"],
     output:
-        models = f"{DIFFOPEN_DIR}/gene_models.rds",
+        models=f"{DIFFOPEN_DIR}/gene_models.rds",
     conda:
         "../envs/r-diffopen.yaml"
     log:
@@ -158,21 +158,21 @@ rule diffopen_gene_models:
 rule diffopen_annotate:
     input:
         # declared so edits to the script invalidate its outputs
-        script  = "workflow/scripts/diffopen_annotate.R",
-        promoter = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter.tsv",
-        enhancer = f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer.tsv",
-        gtf      = config["gtf"],
-        models   = f"{DIFFOPEN_DIR}/gene_models.rds",
+        script="workflow/scripts/diffopen_annotate.R",
+        promoter=f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter.tsv",
+        enhancer=f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer.tsv",
+        gtf=config["gtf"],
+        models=f"{DIFFOPEN_DIR}/gene_models.rds",
     output:
-        summary  = f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
-        universe = f"{DIFFOPEN_DIR}/{{mode}}/genes/universe_genes.txt",
+        summary=f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
+        universe=f"{DIFFOPEN_DIR}/{{mode}}/genes/universe_genes.txt",
     params:
-        indir  = lambda w: f"{DIFFOPEN_DIR}/{w.mode}",
-        outdir = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/genes",
+        indir=lambda w: f"{DIFFOPEN_DIR}/{w.mode}",
+        outdir=lambda w: f"{DIFFOPEN_DIR}/{w.mode}/genes",
     conda:
         "../envs/r-diffopen.yaml"
     log:
-        "logs/diffopen/annotate_{mode}.log"
+        "logs/diffopen/annotate_{mode}.log",
     shell:
         """
         mkdir -p logs/diffopen
@@ -189,19 +189,19 @@ rule diffopen_annotate:
 rule diffopen_enrich:
     input:
         # declared so edits to the script invalidate its outputs
-        script  = "workflow/scripts/diffopen_enrich.R",
-        universe = f"{DIFFOPEN_DIR}/{{mode}}/genes/universe_genes.txt",
+        script="workflow/scripts/diffopen_enrich.R",
+        universe=f"{DIFFOPEN_DIR}/{{mode}}/genes/universe_genes.txt",
     output:
-        summary = f"{DIFFOPEN_DIR}/{{mode}}/enrichment/enrichment_summary.tsv",
+        summary=f"{DIFFOPEN_DIR}/{{mode}}/enrichment/enrichment_summary.tsv",
     params:
-        genedir   = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/genes",
-        outdir    = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/enrichment",
-        min_genes = config.get("diffopen_min_genes", 10),
-        ont       = config.get("diffopen_go_ont", "BP"),
+        genedir=lambda w: f"{DIFFOPEN_DIR}/{w.mode}/genes",
+        outdir=lambda w: f"{DIFFOPEN_DIR}/{w.mode}/enrichment",
+        min_genes=config.get("diffopen_min_genes", 10),
+        ont=config.get("diffopen_go_ont", "BP"),
     conda:
         "../envs/r-diffopen.yaml"
     log:
-        "logs/diffopen/enrich_{mode}.log"
+        "logs/diffopen/enrich_{mode}.log",
     shell:
         """
         mkdir -p logs/diffopen
@@ -224,21 +224,21 @@ rule diffopen_enrich:
 # no single --scaleFactor can express it; its tracks stay on the shared RPGC set.
 rule diffopen_bigwig:
     wildcard_constraints:
-        mode = "none|spikein|ctcf"
+        mode="none|spikein|ctcf",
     input:
-        bam     = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
-        bai     = f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai",
-        factors = f"{DIFFOPEN_DIR}/{{mode}}/size_factors.tsv",
+        bam=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
+        bai=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai",
+        factors=f"{DIFFOPEN_DIR}/{{mode}}/size_factors.tsv",
     output:
-        bw = f"{DIFFOPEN_DIR}/{{mode}}/bigwig/{{sample}}.bw",
+        bw=f"{DIFFOPEN_DIR}/{{mode}}/bigwig/{{sample}}.bw",
     params:
-        bin_size  = config["bin_size"],
-        blacklist = config["blacklist"],
+        bin_size=config["bin_size"],
+        blacklist=config["blacklist"],
     threads: 8
     conda:
         "../envs/deeptools.yaml"
     log:
-        "logs/diffopen/bigwig_{mode}_{sample}.log"
+        "logs/diffopen/bigwig_{mode}_{sample}.log",
     shell:
         """
         mkdir -p $(dirname {output.bw}) logs/diffopen
@@ -266,24 +266,24 @@ rule diffopen_bigwig:
 rule diffopen_tracks:
     input:
         # declared so edits to the script invalidate its outputs
-        script  = "workflow/scripts/diffopen_tracks.R",
-        summary = f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
-        models  = f"{DIFFOPEN_DIR}/gene_models.rds",
+        script="workflow/scripts/diffopen_tracks.R",
+        summary=f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
+        models=f"{DIFFOPEN_DIR}/gene_models.rds",
         # mode's own size-factor-scaled tracks; RPGC fallback for anchor_shape
-        bigwigs = _diffopen_track_bigwigs,
+        bigwigs=_diffopen_track_bigwigs,
     output:
-        done = touch(f"{DIFFOPEN_DIR}/{{mode}}/tracks/.tracks_done"),
+        done=touch(f"{DIFFOPEN_DIR}/{{mode}}/tracks/.tracks_done"),
     params:
-        genedir   = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/genes",
-        outdir    = lambda w: f"{DIFFOPEN_DIR}/{w.mode}/tracks",
-        bwdir     = _diffopen_track_bwdir,
-        tier      = config.get("diffopen_track_tier", "p01"),
-        top       = config.get("diffopen_track_top", 5),
-        min_genes = config.get("diffopen_min_genes", 10),
+        genedir=lambda w: f"{DIFFOPEN_DIR}/{w.mode}/genes",
+        outdir=lambda w: f"{DIFFOPEN_DIR}/{w.mode}/tracks",
+        bwdir=_diffopen_track_bwdir,
+        tier=config.get("diffopen_track_tier", "p01"),
+        top=config.get("diffopen_track_top", 5),
+        min_genes=config.get("diffopen_min_genes", 10),
     conda:
         "../envs/r-diffopen.yaml"
     log:
-        "logs/diffopen/tracks_{mode}.log"
+        "logs/diffopen/tracks_{mode}.log",
     shell:
         """
         mkdir -p logs/diffopen {params.outdir}
@@ -301,18 +301,20 @@ rule diffopen_tracks:
 rule diffopen_report:
     input:
         # declared so edits to the script invalidate its outputs
-        script  = "workflow/scripts/build_diffopen_report.py",
-        summaries = expand(f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt", mode=DIFFOPEN_MODES),
-        hybrid    = f"{DIFFOPEN_DIR}/anchor_shape/run_summary.txt",
+        script="workflow/scripts/build_diffopen_report.py",
+        summaries=expand(
+            f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt", mode=DIFFOPEN_MODES
+        ),
+        hybrid=f"{DIFFOPEN_DIR}/anchor_shape/run_summary.txt",
     output:
-        html = f"{DIFFOPEN_DIR}/diffopen_report.html",
+        html=f"{DIFFOPEN_DIR}/diffopen_report.html",
     params:
-        indir    = DIFFOPEN_DIR,
-        contrast = lambda w: f"{config.get('diffopen_ref_label', 'Control')} (reference)",
+        indir=DIFFOPEN_DIR,
+        contrast=lambda w: f"{config.get('diffopen_ref_label', 'Control')} (reference)",
     conda:
         "../envs/snakemake.yaml"
     log:
-        "logs/diffopen/report.log"
+        "logs/diffopen/report.log",
     shell:
         """
         mkdir -p logs/diffopen
@@ -328,7 +330,9 @@ rule diffopen_report:
 # `excess_over_global` column and no `stat`, so the schemas are not identical.
 rule diffopen_all:
     input:
-        expand(f"{DIFFOPEN_DIR}/{{mode}}/differential_openness.tsv", mode=DIFFOPEN_MODES),
+        expand(
+            f"{DIFFOPEN_DIR}/{{mode}}/differential_openness.tsv", mode=DIFFOPEN_MODES
+        ),
         expand(f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt", mode=DIFFOPEN_MODES),
         rules.diffopen_anchor_shape.output.table,
         rules.diffopen_anchor_shape.output.summary,
@@ -337,9 +341,15 @@ rule diffopen_all:
         # diffopen_{promoter,enhancer}.tsv layout, so the wildcard rules apply
         # unchanged (rule `diffopen` is constrained to none|spikein|ctcf, so
         # there is no ambiguity over who produces the anchor_shape tables).
-        expand(f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
-               mode=DIFFOPEN_MODES + ["anchor_shape"]),
-        expand(f"{DIFFOPEN_DIR}/{{mode}}/enrichment/enrichment_summary.tsv",
-               mode=DIFFOPEN_MODES + ["anchor_shape"]),
-        expand(f"{DIFFOPEN_DIR}/{{mode}}/tracks/.tracks_done",
-               mode=DIFFOPEN_MODES + ["anchor_shape"]),
+        expand(
+            f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
+            mode=DIFFOPEN_MODES + ["anchor_shape"],
+        ),
+        expand(
+            f"{DIFFOPEN_DIR}/{{mode}}/enrichment/enrichment_summary.tsv",
+            mode=DIFFOPEN_MODES + ["anchor_shape"],
+        ),
+        expand(
+            f"{DIFFOPEN_DIR}/{{mode}}/tracks/.tracks_done",
+            mode=DIFFOPEN_MODES + ["anchor_shape"],
+        ),

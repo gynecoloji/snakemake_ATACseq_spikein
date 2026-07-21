@@ -20,54 +20,55 @@ samples_df = pd.read_csv(config["samples_table"])
 SAMPLES = samples_df["sample_id"].tolist()
 
 # ── Output directories (all relative to the working dir) ────────────────
-RESULT_DIR             = "results"
-FASTQC_DIR             = f"{RESULT_DIR}/fastqc"
-FASTP_DIR              = f"{RESULT_DIR}/fastp"
-ALIGN_DIR              = f"{RESULT_DIR}/aligned"
-TMP_DIR                = f"{RESULT_DIR}/tmp"
-FILTERED_DIR           = f"{RESULT_DIR}/filtered"
-DEDUP_DIR              = f"{RESULT_DIR}/dedup"
+RESULT_DIR = "results"
+FASTQC_DIR = f"{RESULT_DIR}/fastqc"
+FASTP_DIR = f"{RESULT_DIR}/fastp"
+ALIGN_DIR = f"{RESULT_DIR}/aligned"
+TMP_DIR = f"{RESULT_DIR}/tmp"
+FILTERED_DIR = f"{RESULT_DIR}/filtered"
+DEDUP_DIR = f"{RESULT_DIR}/dedup"
 BLACKLIST_FILTERED_DIR = f"{RESULT_DIR}/blacklist_filtered"
-PEAKS_DIR              = f"{RESULT_DIR}/peaks"
-QC_DIR                 = f"{RESULT_DIR}/qc"
+PEAKS_DIR = f"{RESULT_DIR}/peaks"
+QC_DIR = f"{RESULT_DIR}/qc"
 
 # ── Spike-in (Module A) directories ─────────────────────────────────────
-SPIKEIN_DIR        = f"{RESULT_DIR}/spikein"
-SPIKEIN_ALIGN_DIR  = f"{SPIKEIN_DIR}/aligned"
-SPIKEIN_COUNT_DIR  = f"{SPIKEIN_DIR}/counts"
-BIGWIG_DIR         = f"{RESULT_DIR}/bigwig"
+SPIKEIN_DIR = f"{RESULT_DIR}/spikein"
+SPIKEIN_ALIGN_DIR = f"{SPIKEIN_DIR}/aligned"
+SPIKEIN_COUNT_DIR = f"{SPIKEIN_DIR}/counts"
+BIGWIG_DIR = f"{RESULT_DIR}/bigwig"
 SPIKEIN_BIGWIG_DIR = f"{RESULT_DIR}/spikein_bigwig"
 
 # ── Consensus (Module B) directories ────────────────────────────────────
-RELAXED_PEAKS_DIR  = f"{RESULT_DIR}/peaks_relaxed"
-CONSENSUS_DIR      = f"{RESULT_DIR}/consensus"
+RELAXED_PEAKS_DIR = f"{RESULT_DIR}/peaks_relaxed"
+CONSENSUS_DIR = f"{RESULT_DIR}/consensus"
 
 # ── QC-pipeline directories (aliases + QC-only outputs) ─────────────────
-RMD_BAM_DIR    = BLACKLIST_FILTERED_DIR   # QC alias: results/blacklist_filtered
-PEAK_DIR       = PEAKS_DIR                 # QC alias: results/peaks
-BEDGRAPH_DIR   = f"{RESULT_DIR}/bedgraph"
-DEEPTOOLS_DIR  = f"{RESULT_DIR}/deeptools"
-FRIP_DIR       = f"{RESULT_DIR}/FRiP"
-IDR_DIR        = f"{RESULT_DIR}/idr"
-RELAXED_DIR    = f"{RESULT_DIR}/qc_relaxed_peaks"
+RMD_BAM_DIR = BLACKLIST_FILTERED_DIR  # QC alias: results/blacklist_filtered
+PEAK_DIR = PEAKS_DIR  # QC alias: results/peaks
+BEDGRAPH_DIR = f"{RESULT_DIR}/bedgraph"
+DEEPTOOLS_DIR = f"{RESULT_DIR}/deeptools"
+FRIP_DIR = f"{RESULT_DIR}/FRiP"
+IDR_DIR = f"{RESULT_DIR}/idr"
+RELAXED_DIR = f"{RESULT_DIR}/qc_relaxed_peaks"
 COMPLEXITY_DIR = f"{RESULT_DIR}/library_complexity"
 SPIKEIN_QC_DIR = f"{RESULT_DIR}/spikein_qc"
-ANNOT_DIR      = f"{RESULT_DIR}/peak_annotation"
+ANNOT_DIR = f"{RESULT_DIR}/peak_annotation"
 
 # ── Differential openness (opt-in stage; see rules/diffopen.smk) ─────────
-DIFFOPEN_DIR   = f"{RESULT_DIR}/diffopen"
+DIFFOPEN_DIR = f"{RESULT_DIR}/diffopen"
 DIFFOPEN_MODES = config.get("diffopen_modes", ["none", "spikein", "ctcf"])
 
 # ── Reference data / config ─────────────────────────────────────────────
-GENOME_2BIT  = os.path.join("ref", "hg38.2bit")   # QC: computeGCBias --genome
-GTF_FILE     = config["gtf"]
+GENOME_2BIT = os.path.join("ref", "hg38.2bit")  # QC: computeGCBias --genome
+GTF_FILE = config["gtf"]
 PROMOTER_BED = config["promoter_bed"]
 ENHANCER_BED = config["enhancer_bed"]
-EGS          = config["effective_genome_size"]
-PEAK_TYPES   = config.get("peak_types", ["narrowPeak"])
+EGS = config["effective_genome_size"]
+PEAK_TYPES = config.get("peak_types", ["narrowPeak"])
 
 # ── Conditions (groups) and per-condition reproducibility method ────────
 GROUPS = samples_df.groupby("group")["sample_id"].apply(list).to_dict()
+
 
 def _repro_method(members):
     n = len(members)
@@ -77,10 +78,11 @@ def _repro_method(members):
         return "idr"
     return "single"
 
-GROUP_METHOD  = {g: _repro_method(m) for g, m in GROUPS.items()}
-IDR_GROUPS    = [g for g in GROUPS if GROUP_METHOD[g] == "idr"]
+
+GROUP_METHOD = {g: _repro_method(m) for g, m in GROUPS.items()}
+IDR_GROUPS = [g for g in GROUPS if GROUP_METHOD[g] == "idr"]
 NONIDR_GROUPS = [g for g in GROUPS if GROUP_METHOD[g] != "idr"]
-IDR_SAMPLES   = [s for g in IDR_GROUPS for s in GROUPS[g]]
+IDR_SAMPLES = [s for g in IDR_GROUPS for s in GROUPS[g]]
 
 # IDR pairs (QC): all within-condition replicate pairs
 IDR_PAIRS = []
@@ -88,9 +90,11 @@ for group, members in GROUPS.items():
     for a, b in combinations(members, 2):
         IDR_PAIRS.append((group, a, b))
 
+
 def _alt(names):
     """Regex alternation for wildcard_constraints; matches nothing if empty."""
     return "|".join(re.escape(n) for n in names) if names else "a^"
+
 
 # fastp adapter handling: AUTO-DETECT adapters for paired-end reads by default
 # (--detect_adapter_for_pe). If adapter sequences are provided in config
@@ -106,10 +110,15 @@ def _fastp_adapter_args():
         return args
     return "--detect_adapter_for_pe"
 
+
 FASTP_ADAPTER_ARGS = _fastp_adapter_args()
 
+
 def _group_relaxed_inputs(wildcards):
-    return [f"{RELAXED_PEAKS_DIR}/{s}_relaxed.narrowPeak" for s in GROUPS[wildcards.group]]
+    return [
+        f"{RELAXED_PEAKS_DIR}/{s}_relaxed.narrowPeak" for s in GROUPS[wildcards.group]
+    ]
+
 
 def _diffopen_track_bigwigs(wildcards):
     """bigWigs for the Gviz tracks of one mode.
@@ -121,15 +130,19 @@ def _diffopen_track_bigwigs(wildcards):
     the shared depth-normalized (RPGC) tracks.
     """
     if wildcards.mode in DIFFOPEN_MODES:
-        return expand(f"{DIFFOPEN_DIR}/{wildcards.mode}/bigwig/{{sample}}.bw",
-                      sample=SAMPLES)
+        return expand(
+            f"{DIFFOPEN_DIR}/{wildcards.mode}/bigwig/{{sample}}.bw", sample=SAMPLES
+        )
     return expand(f"{BIGWIG_DIR}/{{sample}}.bw", sample=SAMPLES)
 
 
 def _diffopen_track_bwdir(wildcards):
     """Directory matching _diffopen_track_bigwigs (the R script globs it)."""
-    return (f"{DIFFOPEN_DIR}/{wildcards.mode}/bigwig"
-            if wildcards.mode in DIFFOPEN_MODES else BIGWIG_DIR)
+    return (
+        f"{DIFFOPEN_DIR}/{wildcards.mode}/bigwig"
+        if wildcards.mode in DIFFOPEN_MODES
+        else BIGWIG_DIR
+    )
 
 
 def _diffopen_extra_input(wildcards):
