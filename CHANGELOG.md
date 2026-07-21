@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.2.0...v1.3.0) (2026-07-21)
+
+
+### Added
+
+* add downstream gene/enrichment/track stages and split anchor_shape by class ([73bf28b](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/73bf28bb0f0ea5dcf0b9ca78bfda62873308add0))
+* mode-scaled bigWigs for tracks, and pairwise IDR in the QC report ([a469d49](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/a469d49be1af59f6171d28d9896f26f0f8e29eaa))
+* split differential openness by promoter vs enhancer class ([074c182](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/074c182d57d4aee8d221c2741e69c0d73349f34e))
+
+
+### Fixed
+
+* declare diffopen scripts as rule inputs and repair valueless-flag parsing ([cd648d5](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/cd648d52addc02f73017670d3d1f91ce7f23b46e))
+* declare shell-invoked scripts as inputs in qc.smk and atacseq.smk ([5cbd0fc](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/5cbd0fcd79b5de192c7d405b9909fa6799f156d0))
+* report unshrunk MLE effect sizes alongside the shrunk log2FC ([c1d6444](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/c1d64440c91c8db15864cb8730e17a6f5b0931c9))
+* second bare {input} in samtools_sort_filter_index ([d541a24](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/d541a2474c8b7f0b166d54a7a9dc3f3847b63ddc))
+
+
+### Documentation
+
+* state that Gviz track heights are not the effect size ([7923587](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/7923587a47f548d90e4c03367866eec2a245d0c9))
+
 ## [1.2.0](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.1.1...v1.2.0) (2026-07-19)
 
 
