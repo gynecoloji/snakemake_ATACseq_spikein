@@ -135,7 +135,10 @@ rule bowtie2_align:
 # (drop chrM/chrY/non-primary). Mirrors the CUT&RUN filter + ENCODE mito removal.
 rule samtools_sort_filter_index:
     input:
-        f"{ALIGN_DIR}/{{sample}}.bam"
+        # named because `script` below makes a bare {input} expand to both paths
+        bam    = f"{ALIGN_DIR}/{{sample}}.bam",
+        # declared so edits to the script invalidate its outputs
+        script = "workflow/scripts/process_sam.py",
     output:
         bam = f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam",
         bai = f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam.bai",
@@ -158,7 +161,7 @@ rule samtools_sort_filter_index:
 
         # Keep properly-paired, primary, mapped, UNIQUE HUMAN reads: drop Bowtie2
         # multi-mappers (XS:i:), and drop spike-in reads (RNAME starts with the prefix)
-        samtools view -@ {threads} -hS -f 2 -F 2316 {input} | grep -v "XS:i:" | \
+        samtools view -@ {threads} -hS -f 2 -F 2316 {input.bam} | grep -v "XS:i:" | \
             awk -v p="^{params.spikein_prefix}" '/^@/ || $3 !~ p' \
             > {TMP_DIR}/temp_{wildcards.sample}.unsorted.sam 2>> {log}
 
@@ -362,7 +365,9 @@ rule build_combined_genome:
 # dedup and count them to derive the normalization factor.
 rule spikein_extract_count:
     input:
-        sam = f"{ALIGN_DIR}/{{sample}}.bam"
+        sam = f"{ALIGN_DIR}/{{sample}}.bam",
+        # declared so edits to the script invalidate its outputs
+        script = "workflow/scripts/process_sam.py",
     output:
         bam      = f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.bam",
         bai      = f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.bam.bai",

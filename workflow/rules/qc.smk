@@ -291,7 +291,9 @@ rule deeptools_tss:
 #     canvas heatmap; reuses the existing matrix.mat.gz (no computeMatrix rerun).
 rule deeptools_tss_heatmap_downsample:
     input:
-        matrix = os.path.join(DEEPTOOLS_DIR, "matrix.mat.gz")
+        matrix = os.path.join(DEEPTOOLS_DIR, "matrix.mat.gz"),
+        # declared so edits to the script invalidate its outputs
+        script = "workflow/scripts/downsample_tss_matrix.py",
     output:
         json = os.path.join(DEEPTOOLS_DIR, "tss_heatmap_downsampled.json")
     conda:
@@ -646,6 +648,9 @@ rule qc_report:
         os.path.join(DEEPTOOLS_DIR, "fragment_lengths.txt"),
         os.path.join(DEEPTOOLS_DIR, "correlation_matrix.tab"),
         os.path.join(DEEPTOOLS_DIR, "tss_heatmap_downsampled.json"),
+        # declared so edits to the script invalidate its outputs
+        # (keyword must follow the positional inputs above)
+        script = "workflow/scripts/build_qc_report.py",
     output:
         html = os.path.join(QC_DIR, "atacseq_qc_report.html")
     params:
