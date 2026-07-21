@@ -157,7 +157,7 @@ rule samtools_sort_filter_index:
         """
         mkdir -p {FILTERED_DIR} logs/samtools {TMP_DIR}
         # Raw flagstat of the aligned SAM (pre-filter QC)
-        samtools flagstat {input} > {FILTERED_DIR}/{wildcards.sample}_raw_summary.txt 2>> {log}
+        samtools flagstat {input.bam} > {FILTERED_DIR}/{wildcards.sample}_raw_summary.txt 2>> {log}
 
         # Keep properly-paired, primary, mapped, UNIQUE HUMAN reads: drop Bowtie2
         # multi-mappers (XS:i:), and drop spike-in reads (RNAME starts with the prefix)
