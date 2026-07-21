@@ -448,6 +448,22 @@ column and which values indicate a scaling artifact rather than biology.
 | Browser tracks | `diffopen_tracks` | `<mode>/tracks/gviz_<class>_<up\|down>_<GENE>.png/.pdf` — per-sample coverage, GENCODE models, and the differential region highlighted |
 | HTML summary | `diffopen_report` | `results/diffopen/diffopen_report.html` — self-contained (inline SVG, no external assets), comparing all four normalizations side by side with a verdict panel |
 
+> ⚠️ **Track heights are not the effect size.** The Gviz panels read
+> `results/bigwig/` — deepTools `--normalizeUsing RPGC` (1× depth), the **same
+> normalization for every mode**. They are *not* rescaled by the mode's size
+> factors, so read them as *where the signal is*; the `log2FoldChange_MLE`
+> column is the quantitative statement.
+>
+> This is unavoidable for `anchor_shape`. The other modes have a per-sample
+> **scalar** size factor, so a bigWig could in principle be rescaled to match
+> them. The hybrid's normalization is a **G×n matrix** —
+> `log2 NF_gi = shape_i(A_g) − o_i`, where `shape_i()` is evaluated at each
+> region's own mean intensity `A_g`. Two regions in the same sample get
+> different corrections, so no single scale factor exists and a plain bigWig
+> cannot represent it. (`results/spikein_bigwig/` holds spike-in-scaled tracks
+> — the level term `o_i` only, without the shape correction — if you want a
+> closer visual match at the cost of leaving the intensity dependence in.)
+
 Three significance tiers are carried through: `padj05` (padj < 0.05), `p01`
 (p < 0.01) and `p05` (p < 0.05). Enrichment and tracks are **gated** — a set with
 `≤ diffopen_min_genes` genes is skipped, since small sets give unstable,
