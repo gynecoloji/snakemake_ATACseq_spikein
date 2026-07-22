@@ -21,6 +21,13 @@
 #                   global level as invariant, so a true global shift is
 #                   undetectable by construction.
 #
+#   --mode rnastable  Median-of-ratios restricted to promoter-class consensus
+#                   peaks that also sit over the TSS window of an RNA-seq-STABLE
+#                   gene (neither up- nor down-regulated). Spike-in free, keyed to
+#                   the sample's own transcriptome. Like `none`/`ctcf` it defines
+#                   the anchor set as invariant, so a true global shift is
+#                   undetectable by construction.
+#
 # Inputs (produced by this workflow):
 #   results/consensus/consensus_counts.txt     featureCounts matrix + coords
 #   config/samples.csv                         design (sample_id, type, group)
@@ -42,7 +49,12 @@ suppressPackageStartupMessages({
 # ---- tiny --key value arg parser -------------------------------------------
 parse_args <- function(args) {
   out <- list(mode = "none", `ref-label` = "Control", `min-anchors` = "200",
-              `trim-k` = "2.5", `trim-iter` = "2", `min-class-peaks` = "100")
+              `trim-k` = "2.5", `trim-iter` = "2", `min-class-peaks` = "100",
+              `tss-window` = "2000", `rna-gene-col` = "gene",
+              `rna-lfc-col` = "log2FoldChange", `rna-padj-col` = "padj",
+              `rna-basemean-col` = "baseMean", `rna-basemean-min` = "10",
+              `rna-padj-min` = "0.5", `rna-lfc-max` = "0.5",
+              `promoter-class-required` = "true")
   i <- 1
   while (i <= length(args)) {
     key <- sub("^--", "", args[i]); out[[key]] <- args[i + 1]; i <- i + 2
@@ -78,6 +90,27 @@ read_design <- function(path, ref_label) {
   pair <- factor(sub(".*_([0-9]+)_S[0-9]+$", "\\1", s$sample_id))
   data.frame(sample_id = s$sample_id, condition = condition, pair = pair,
              stringsAsFactors = FALSE)
+}
+
+#' Read a DESeq2/edgeR results table (TSV by default; CSV by extension).
+read_de_table <- function(path) {
+  if (grepl("\\.csv$", path, ignore.case = TRUE))
+    utils::read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
+  else
+    utils::read.delim(path, stringsAsFactors = FALSE, check.names = FALSE)
+}
+
+#' Transcript GRanges (with gene_name) from the cached models RDS, or by parsing
+#' the GTF if no cache is supplied. Reuses the diffopen_gene_models cache so the
+#' 1.3 GB GTF is not re-parsed.
+load_gene_models_tx <- function(models, gtf) {
+  if (!is.null(models) && nzchar(models) && file.exists(models)) {
+    gm <- readRDS(models)
+    return(gm$tx)
+  }
+  if (is.null(gtf)) stop("rnastable: need --models (cache) or --gtf")
+  suppressPackageStartupMessages({ library(rtracklayer) })
+  rtracklayer::import(gtf, feature.type = "transcript")
 }
 
 #' DESeq2/edgeR results -> character vector of transcriptionally STABLE genes.
@@ -321,12 +354,19 @@ fit_class <- function(counts, coords, condition, pair, size_factors, idx = NULL,
 main <- function() {
   a <- parse_args(commandArgs(trailingOnly = TRUE))
   mode <- a$mode
-  if (!mode %in% c("none", "spikein", "ctcf"))
-    stop("--mode must be one of: none, spikein, ctcf (got '", mode, "')")
+  if (!mode %in% c("none", "spikein", "ctcf", "rnastable"))
+    stop("--mode must be one of: none, spikein, ctcf, rnastable (got '", mode, "')")
   for (k in c("counts", "samples", "outdir"))
     if (is.null(a[[k]])) stop("missing required --", k)
   if (mode == "spikein" && is.null(a$spikein)) stop("--mode spikein requires --spikein")
   if (mode == "ctcf"    && is.null(a$ctcf))    stop("--mode ctcf requires --ctcf")
+  if (mode == "rnastable") {
+    if (is.null(a$`rna-table`)) stop("--mode rnastable requires --rna-table")
+    if (is.null(a$models) && is.null(a$gtf))
+      stop("--mode rnastable requires --models (cache) or --gtf")
+    if (is.null(a$`promoter-bed`) || is.null(a$`enhancer-bed`))
+      stop("--mode rnastable requires --promoter-bed and --enhancer-bed")
+  }
   dir.create(a$outdir, showWarnings = FALSE, recursive = TRUE)
 
   fc  <- read_featurecounts_matrix(a$counts)
@@ -342,8 +382,10 @@ main <- function() {
   # ---- size factors for the requested mode ----
   # if/else rather than switch(): `<<-` inside a switch branch would assign to the
   # global env, not this frame, silently leaving the counters at NA.
-  n_anchors <- NA_integer_
-  n_kept    <- NA_integer_
+  n_anchors  <- NA_integer_
+  n_kept     <- NA_integer_
+  rna_stable <- NA_integer_
+  rna_match  <- NA_real_
   if (mode == "none") {
     # Estimated once on the FULL matrix, then shared by every peak class.
     sf <- size_factors_deseq2(counts, des$condition)
@@ -351,7 +393,7 @@ main <- function() {
     spike <- read_spikein_reads(a$spikein)
     stopifnot(all(samp %in% names(spike)))
     sf <- size_factors_spikein(spike[samp])
-  } else {                                            # ctcf
+  } else if (mode == "ctcf") {
     idx <- which(ctcf_overlap(fc$coords, a$ctcf))
     n_anchors <- length(idx)
     message(sprintf("CTCF-overlapping consensus peaks: %d / %d", n_anchors, nrow(counts)))
@@ -365,6 +407,29 @@ main <- function() {
     sf     <- fit$sf
     n_kept <- length(fit$idx)
     message(sprintf("anchors kept after invariance trim: %d / %d", n_kept, n_anchors))
+  } else if (mode == "rnastable") {
+    tx  <- load_gene_models_tx(a$models, a$gtf)
+    de  <- read_de_table(a$`rna-table`)
+    prom_is <- classify_peaks(fc$coords, a$`promoter-bed`, a$`enhancer-bed`) == "promoter"
+    rr <- size_factors_rnastable(
+      counts, fc$coords, prom_is, tx, de,
+      gene_col = a$`rna-gene-col`, lfc_col = a$`rna-lfc-col`,
+      padj_col = a$`rna-padj-col`, basemean_col = a$`rna-basemean-col`,
+      basemean_min = as.numeric(a$`rna-basemean-min`),
+      padj_min = as.numeric(a$`rna-padj-min`),
+      lfc_max = as.numeric(a$`rna-lfc-max`),
+      window = as.integer(a$`tss-window`),
+      min_anchors = as.integer(a$`min-anchors`),
+      promoter_class_required = identical(tolower(a$`promoter-class-required`), "true"),
+      condition = des$condition,
+      trim_k = as.numeric(a$`trim-k`), iter = as.integer(a$`trim-iter`))
+    sf         <- rr$sf
+    n_anchors  <- rr$n_anchor
+    n_kept     <- rr$n_kept
+    rna_stable <- rr$n_stable
+    rna_match  <- rr$match_rate
+    message(sprintf("rnastable: %d stable genes (%.1f%% matched GTF) -> %d anchor peaks -> %d kept",
+                    rna_stable, 100 * rna_match, n_anchors, n_kept))
   }
 
   # ---- fit: pooled first, then promoter / enhancer separately ----
@@ -472,6 +537,12 @@ main <- function() {
     if (mode == "ctcf")
       sprintf("CTCF anchors              : %d overlapping -> %d kept after invariance trim (%.1f%% dropped)",
               n_anchors, n_kept, 100 * (1 - n_kept / n_anchors)) else NULL,
+    if (mode == "rnastable") c(
+      sprintf("stable genes (RNA-seq)    : %d (%.1f%% matched GTF gene_name)", rna_stable, 100 * rna_match),
+      sprintf("rnastable anchors         : %d promoter-class over stable TSS -> %d kept after trim",
+              n_anchors, n_kept),
+      "note                      : like none/ctcf, assumes anchors invariant; cannot see a uniform global shift"
+    ) else NULL,
     sprintf("size-factor spread (max/min): %.2fx", spread),
     sprintf("median |log2FC|           : %.4f", stats::median(abs(res$log2FoldChange), na.rm = TRUE)),
     sprintf("median log2FC (global tilt): %.4f", stats::median(res$log2FoldChange, na.rm = TRUE)),
