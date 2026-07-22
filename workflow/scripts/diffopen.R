@@ -206,6 +206,32 @@ size_factors_ctcf <- function(counts, anchor_idx, condition,
   list(sf = sf, idx = idx, n_start = length(anchor_idx))
 }
 
+#' rnastable size factors: median-of-ratios over consensus peaks that are
+#' promoter-class AND over a stable gene's TSS window, with the same iterative
+#' invariance trim as the ctcf mode. Refuses below `min_anchors`.
+size_factors_rnastable <- function(counts, coords, promoter_is, tx, de,
+                                   gene_col, lfc_col, padj_col, basemean_col,
+                                   basemean_min, padj_min, lfc_max,
+                                   window, min_anchors, promoter_class_required,
+                                   condition, trim_k, iter) {
+  stable <- stable_genes_from_de(de, gene_col, lfc_col, padj_col, basemean_col,
+                                 basemean_min, padj_min, lfc_max)
+  present    <- intersect(stable, unique(stats::na.omit(as.character(tx$gene_name))))
+  match_rate <- if (length(stable)) length(present) / length(stable) else NA_real_
+  windows <- stable_tss_windows(tx, stable, window)
+  idx     <- rnastable_anchor_idx(coords, promoter_is, windows, promoter_class_required)
+  n_anchor <- length(idx)
+  if (n_anchor < min_anchors)
+    stop(sprintf(paste0("only %d rnastable anchors (< %d) [promoter-class peaks over ",
+                        "stable-gene TSS windows]. Loosen thresholds (raise --rna-lfc-max ",
+                        "or lower --rna-padj-min), widen --tss-window, or set ",
+                        "--promoter-class-required false."), n_anchor, min_anchors))
+  fit <- size_factors_ctcf(counts, idx, condition,
+                           trim_k = trim_k, iter = iter, min_anchors = min_anchors)
+  list(sf = fit$sf, n_stable = length(stable), match_rate = match_rate,
+       n_anchor = n_anchor, n_kept = length(fit$idx))
+}
+
 # ---- DESeq2 -----------------------------------------------------------------
 
 #' Write a results table plus pre-filtered nominal-significance subsets.
