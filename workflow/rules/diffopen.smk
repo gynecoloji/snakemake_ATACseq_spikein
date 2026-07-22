@@ -60,24 +60,28 @@ rule diffopen:
         extra=lambda w, input: (
             f"--spikein {input.spikein}"
             if w.mode == "spikein"
-            else f"--ctcf {input.ctcf}"
-            if w.mode == "ctcf"
             else (
-                f"--rna-table {input.rna_table} --models {input.models} "
-                f"--tss-window {config.get('diffopen_rna_tss_window', 2000)} "
-                f"--rna-gene-col {config.get('diffopen_rna_gene_col', 'gene')} "
-                f"--rna-lfc-col {config.get('diffopen_rna_lfc_col', 'log2FoldChange')} "
-                f"--rna-padj-col {config.get('diffopen_rna_padj_col', 'padj')} "
-                f"--rna-basemean-col {config.get('diffopen_rna_basemean_col', 'baseMean')} "
-                f"--rna-basemean-min {config.get('diffopen_rna_basemean_min', 10)} "
-                f"--rna-padj-min {config.get('diffopen_rna_padj_min', 0.5)} "
-                f"--rna-lfc-max {config.get('diffopen_rna_lfc_max', 0.5)} "
-                f"--min-anchors {config.get('diffopen_rna_min_anchors', 100)} "
-                f"--promoter-class-required "
-                f"{str(config.get('diffopen_rna_promoter_class_required', True)).lower()}"
+                f"--ctcf {input.ctcf}"
+                if w.mode == "ctcf"
+                else (
+                    (
+                        f"--rna-table {input.rna_table} --models {input.models} "
+                        f"--tss-window {config.get('diffopen_rna_tss_window', 2000)} "
+                        f"--rna-gene-col {config.get('diffopen_rna_gene_col', 'gene')} "
+                        f"--rna-lfc-col {config.get('diffopen_rna_lfc_col', 'log2FoldChange')} "
+                        f"--rna-padj-col {config.get('diffopen_rna_padj_col', 'padj')} "
+                        f"--rna-basemean-col {config.get('diffopen_rna_basemean_col', 'baseMean')} "
+                        f"--rna-basemean-min {config.get('diffopen_rna_basemean_min', 10)} "
+                        f"--rna-padj-min {config.get('diffopen_rna_padj_min', 0.5)} "
+                        f"--rna-lfc-max {config.get('diffopen_rna_lfc_max', 0.5)} "
+                        f"--min-anchors {config.get('diffopen_rna_min_anchors', 100)} "
+                        f"--promoter-class-required "
+                        f"{str(config.get('diffopen_rna_promoter_class_required', True)).lower()}"
+                    )
+                    if w.mode == "rnastable"
+                    else ""
+                )
             )
-            if w.mode == "rnastable"
-            else ""
         ),
     conda:
         "../envs/r-diffopen.yaml"
