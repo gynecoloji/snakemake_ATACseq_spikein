@@ -14,6 +14,12 @@ win <- stable_tss_windows(tx, c("STABLE1","STABLE2"), window = 100)
 stopifnot(length(win) == 2)                 # UP1 excluded
 stopifnot(all(width(win) == 201))           # +/- 100 around a 1bp TSS
 
+# strand-awareness: UP1 is on the '-' strand, so its TSS is the transcript END
+# (5000 + 500 - 1 = 5499), NOT its start. A naive start()-based calc would be wrong.
+win_minus <- stable_tss_windows(tx, "UP1", window = 100)
+stopifnot(length(win_minus) == 1)
+stopifnot(start(win_minus) == 5399, end(win_minus) == 5599)   # 5499 +/- 100
+
 # 4 consensus peaks
 coords <- data.frame(
   Geneid = paste0("p", 1:4),

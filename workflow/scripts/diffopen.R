@@ -142,7 +142,7 @@ rnastable_anchor_idx <- function(coords, promoter_is, tss_windows,
                                  promoter_class_required = TRUE) {
   suppressPackageStartupMessages({ library(GenomicRanges); library(IRanges) })
   peaks <- GRanges(coords$Chr, IRanges(coords$Start, coords$End))
-  over  <- overlapsAny(peaks, tss_windows)
+  over  <- IRanges::overlapsAny(peaks, tss_windows)
   if (promoter_class_required) which(promoter_is & over) else which(over)
 }
 
