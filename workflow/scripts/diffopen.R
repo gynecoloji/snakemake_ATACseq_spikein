@@ -80,6 +80,26 @@ read_design <- function(path, ref_label) {
              stringsAsFactors = FALSE)
 }
 
+#' DESeq2/edgeR results -> character vector of transcriptionally STABLE genes.
+#' Stable = expressed AND not significant AND small fold change:
+#'   baseMean >= basemean_min  AND  (padj >= padj_min OR padj is NA)  AND
+#'   abs(log2FoldChange) <= lfc_max
+#' NA padj counts as non-significant; NA baseMean/log2FC never qualifies.
+stable_genes_from_de <- function(de, gene_col = "gene", lfc_col = "log2FoldChange",
+                                 padj_col = "padj", basemean_col = "baseMean",
+                                 basemean_min = 10, padj_min = 0.5, lfc_max = 0.5) {
+  for (col in c(gene_col, lfc_col, padj_col, basemean_col))
+    if (!col %in% colnames(de)) stop("RNA-seq DE table missing column: ", col)
+  bm   <- suppressWarnings(as.numeric(de[[basemean_col]]))
+  padj <- suppressWarnings(as.numeric(de[[padj_col]]))
+  lfc  <- suppressWarnings(as.numeric(de[[lfc_col]]))
+  keep <- !is.na(bm)  & bm >= basemean_min &
+          (is.na(padj) | padj >= padj_min) &
+          !is.na(lfc)  & abs(lfc) <= lfc_max
+  genes <- unique(as.character(de[[gene_col]][keep]))
+  genes[!is.na(genes) & nzchar(genes)]
+}
+
 #' Logical over consensus peaks: TRUE where the peak overlaps any feature in a BED.
 bed_overlap <- function(coords, bed_path) {
   suppressPackageStartupMessages({
