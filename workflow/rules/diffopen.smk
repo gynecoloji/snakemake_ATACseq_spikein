@@ -15,7 +15,7 @@
 # Shared config, directory constants and _diffopen_extra_input() are in common.smk.
 
 
-# Three selectable normalizations, one output directory each. See
+# Four selectable normalizations, one output directory each. See
 # workflow/scripts/diffopen.R for what each mode does and its trade-off.
 rule diffopen:
     wildcard_constraints:
@@ -371,7 +371,7 @@ rule diffopen_all:
         rules.diffopen_report.output.html,
         # Downstream runs for the hybrid too: it now emits the same
         # diffopen_{promoter,enhancer}.tsv layout, so the wildcard rules apply
-        # unchanged (rule `diffopen` is constrained to none|spikein|ctcf, so
+        # unchanged (rule `diffopen` is constrained to none|spikein|ctcf|rnastable, so
         # there is no ambiguity over who produces the anchor_shape tables).
         expand(
             f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",

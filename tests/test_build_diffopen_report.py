@@ -3,7 +3,7 @@ import pathlib
 
 
 def _load():
-    p = pathlib.Path("workflow/scripts/build_diffopen_report.py")
+    p = pathlib.Path(__file__).resolve().parents[1] / "workflow" / "scripts" / "build_diffopen_report.py"
     spec = importlib.util.spec_from_file_location("bdr", p)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

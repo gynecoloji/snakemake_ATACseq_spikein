@@ -166,8 +166,14 @@ def _diffopen_extra_input(wildcards):
     if wildcards.mode == "ctcf":
         return {"ctcf": config.get("ctcf_bed", "ref/constitutive_ctcf_hg38.bed")}
     if wildcards.mode == "rnastable":
+        rna_table = config.get("diffopen_rna_table")
+        if not rna_table:
+            raise ValueError(
+                "diffopen mode 'rnastable' requires 'diffopen_rna_table' to be set "
+                "(path to the RNA-seq DE results table)."
+            )
         return {
-            "rna_table": config["diffopen_rna_table"],
+            "rna_table": rna_table,
             "models": f"{DIFFOPEN_DIR}/gene_models.rds",
         }
     return {}
