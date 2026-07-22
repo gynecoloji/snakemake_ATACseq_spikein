@@ -4,14 +4,14 @@
 source("workflow/scripts/diffopen.R")
 
 de <- data.frame(
-  gene           = c("STABLE1","UP1","LOWEXPR","SIG1","NAPADJ","BORDER","NALFC"),
-  baseMean       = c(100,      100,  5,        100,   100,     10,       100),
-  log2FoldChange = c(0.1,      2.0,  0.1,      0.2,   0.1,     0.5,      NA),
-  padj           = c(0.9,      0.001,0.9,      0.01,  NA,      0.5,      0.9),
+  gene           = c("STABLE1","UP1","LOWEXPR","SIG1","NAPADJ","BORDER","NALFC","NABM","NEGBORDER"),
+  baseMean       = c(100,      100,  5,        100,   100,     10,       100,    NA,   100),
+  log2FoldChange = c(0.1,      2.0,  0.1,      0.2,   0.1,     0.5,      NA,     0.1,  -0.5),
+  padj           = c(0.9,      0.001,0.9,      0.01,  NA,      0.5,      0.9,    0.9,  0.9),
   stringsAsFactors = FALSE)
 
 got <- sort(stable_genes_from_de(de))
-want <- sort(c("STABLE1","NAPADJ","BORDER"))
+want <- sort(c("STABLE1","NAPADJ","BORDER","NEGBORDER"))
 stopifnot(identical(got, want))
 
 # column-name overrides
