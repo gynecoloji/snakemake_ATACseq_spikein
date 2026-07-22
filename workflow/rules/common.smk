@@ -58,6 +58,14 @@ ANNOT_DIR = f"{RESULT_DIR}/peak_annotation"
 DIFFOPEN_DIR = f"{RESULT_DIR}/diffopen"
 DIFFOPEN_MODES = config.get("diffopen_modes", ["none", "spikein", "ctcf"])
 
+# rnastable needs an RNA-seq DE table; fail fast at DAG-build time with a clear
+# message rather than deep in a job if it is requested but not configured.
+if "rnastable" in DIFFOPEN_MODES and not config.get("diffopen_rna_table"):
+    raise ValueError(
+        "diffopen_modes includes 'rnastable' but 'diffopen_rna_table' is unset. "
+        "Point diffopen_rna_table at your RNA-seq DESeq2/edgeR results table."
+    )
+
 # ── Reference data / config ─────────────────────────────────────────────
 GENOME_2BIT = os.path.join("ref", "hg38.2bit")  # QC: computeGCBias --genome
 GTF_FILE = config["gtf"]
@@ -148,12 +156,18 @@ def _diffopen_track_bwdir(wildcards):
 def _diffopen_extra_input(wildcards):
     """Mode-specific extra input for the `diffopen` rule.
 
-    none    -> no extra input (DESeq2 median-of-ratios over all peaks)
-    spikein -> the spike-in normalization factor table
-    ctcf    -> the constitutive-CTCF anchor BED
+    none      -> no extra input (DESeq2 median-of-ratios over all peaks)
+    spikein   -> the spike-in normalization factor table
+    ctcf      -> the constitutive-CTCF anchor BED
+    rnastable -> the RNA-seq DE table and the gene-models RDS
     """
     if wildcards.mode == "spikein":
         return {"spikein": f"{SPIKEIN_DIR}/normalization_factors.tsv"}
     if wildcards.mode == "ctcf":
         return {"ctcf": config.get("ctcf_bed", "ref/constitutive_ctcf_hg38.bed")}
+    if wildcards.mode == "rnastable":
+        return {
+            "rna_table": config["diffopen_rna_table"],
+            "models": f"{DIFFOPEN_DIR}/gene_models.rds",
+        }
     return {}
