@@ -126,6 +126,26 @@ classify_peaks <- function(coords, promoter_bed, enhancer_bed) {
          levels = c("promoter", "enhancer", "other"))
 }
 
+#' Strand-aware TSS +/- window for transcripts whose gene_name is stable.
+#' Reuses the same TSS definition as diffopen_annotate.R (resize to start).
+stable_tss_windows <- function(tx, stable_genes, window) {
+  suppressPackageStartupMessages({ library(GenomicRanges) })
+  keep <- !is.na(tx$gene_name) & tx$gene_name %in% stable_genes
+  tss  <- GenomicRanges::resize(tx[keep], width = 1, fix = "start")
+  GenomicRanges::resize(tss, width = 2L * as.integer(window) + 1L, fix = "center")
+}
+
+#' Row indices of consensus peaks that anchor the rnastable normalization.
+#' A peak anchors iff it overlaps a stable-gene TSS window AND (when required)
+#' is promoter-class. `promoter_is` is a logical over the coords rows.
+rnastable_anchor_idx <- function(coords, promoter_is, tss_windows,
+                                 promoter_class_required = TRUE) {
+  suppressPackageStartupMessages({ library(GenomicRanges); library(IRanges) })
+  peaks <- GRanges(coords$Chr, IRanges(coords$Start, coords$End))
+  over  <- overlapsAny(peaks, tss_windows)
+  if (promoter_class_required) which(promoter_is & over) else which(over)
+}
+
 # ---- size factors, one function per mode ------------------------------------
 
 #' Spike-in depth -> size factors, centered to geometric mean 1.
