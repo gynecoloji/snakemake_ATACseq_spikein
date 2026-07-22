@@ -46,7 +46,7 @@ jobs:
       - name: Dry run rnastable guard fires without a table
         run: |
           if snakemake -s workflow/Snakefile -n --cores 1 \
-               --config 'diffopen_modes=[rnastable]' 2>err.log; then
+               --config 'diffopen_modes=[rnastable]' >err.log 2>&1; then
             echo "guard did not fire" >&2; cat err.log; exit 1
           fi
           grep -qi "diffopen_rna_table" err.log && echo "guard fired as expected"
