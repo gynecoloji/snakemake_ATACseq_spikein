@@ -34,11 +34,13 @@ writeLines("chr1\t900\t1300", file.path(d, "prom.bed"))
 writeLines("chr1\t9000\t9300", file.path(d, "enh.bed"))
 
 # min-anchors is impossibly high -> must stop() at the floor after full dispatch.
+rscript <- shQuote(file.path(R.home("bin"), "Rscript"))
 cmd <- sprintf(paste(
-  "Rscript workflow/scripts/diffopen.R --mode rnastable --counts %s --samples %s",
+  "%s workflow/scripts/diffopen.R --mode rnastable --counts %s --samples %s",
   "--outdir %s --ref-label Control --promoter-bed %s --enhancer-bed %s",
   "--rna-table %s --models %s --tss-window 2000 --min-anchors 1000000",
   "--promoter-class-required true --trim-k 2.5 --trim-iter 2 2>&1"),
+  rscript,
   file.path(d, "counts.txt"), file.path(d, "samples.csv"), file.path(d, "out"),
   file.path(d, "prom.bed"), file.path(d, "enh.bed"),
   file.path(d, "de.tsv"), file.path(d, "models.rds"))
