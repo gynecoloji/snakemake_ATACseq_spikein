@@ -579,15 +579,16 @@ Apptainer:
 |---|---|---|
 | **`gynecoloji/atacseq-spikein`** | Snakemake + all six per-rule conda envs (incl. `r-diffopen`) | primary pipeline, QC, and differential openness |
 
-**Download** — pull with Docker, or convert to a local `.sif` once for Apptainer /
-Singularity (HPC):
+**Download** — both come from the same published image; **no build required**.
+On HPC (Apptainer / Singularity) a single command downloads it and writes a
+ready-to-run `.sif` in your current directory:
 
 ```bash
+# Apptainer / Singularity (HPC) — downloads + builds ./atacseq-spikein.sif from the image
+apptainer pull atacseq-spikein.sif docker://gynecoloji/atacseq-spikein:latest
+
 # Docker
 docker pull gynecoloji/atacseq-spikein:latest
-
-# Apptainer / Singularity  (writes ./atacseq-spikein.sif in the current directory)
-apptainer pull atacseq-spikein.sif docker://gynecoloji/atacseq-spikein:latest
 ```
 
 Genomes/FASTQs are **not** baked into the image; you mount your project directory at run
@@ -627,34 +628,37 @@ docker compose run --rm atacseq --cores 16 qc_all
 
 #### Apptainer / Singularity (HPC)
 
-On clusters without Docker, convert the image to a SIF once and run it with Apptainer.
-Apptainer auto-mounts `$HOME`, `/tmp`, and the current directory, and runs as you (no
-`--user` needed):
+On clusters without Docker, download the image as a `.sif` once, then run it. On most
+HPC systems you first load the module (e.g. `module load apptainer`). Apptainer
+auto-mounts `$HOME`, `/tmp`, and the current directory, and runs as you (no `--user`
+needed):
 
 ```bash
-# One-time: build a local .sif from the Docker Hub image
+# One-time: download + build ./atacseq-spikein.sif from the Docker Hub image
 apptainer pull atacseq-spikein.sif docker://gynecoloji/atacseq-spikein:latest
 
-# Run from your project directory (everything: primary stage → QC report):
+# Run from your project directory — the entrypoint IS snakemake, so just pass its args:
+apptainer run atacseq-spikein.sif -s workflow/Snakefile --cores 16            # everything → QC
+apptainer run atacseq-spikein.sif -s workflow/Snakefile --cores 16 qc_all     # just one stage
+apptainer run atacseq-spikein.sif -s workflow/Snakefile --cores 1  -n         # dry run
+```
+
+The explicit `apptainer exec … snakemake …` form also works if you ever need to bypass
+the entrypoint:
+
+```bash
 apptainer exec atacseq-spikein.sif \
     snakemake --use-conda --conda-frontend mamba --conda-prefix /opt/wf-conda \
     -s workflow/Snakefile --cores 16
-
-# Or just one stage: append the atacseq_all or qc_all target
-apptainer exec atacseq-spikein.sif \
-    snakemake --use-conda --conda-frontend mamba --conda-prefix /opt/wf-conda \
-    -s workflow/Snakefile --cores 16 qc_all
 ```
 
 Notes:
 - **References/data outside the project dir:** if `ref/` genomes live elsewhere (e.g. on
   scratch), bind them in — `--bind /scratch/genomes:/scratch/genomes` — and point
   `config/config.yaml` at the bound paths.
-- **Pre-built envs:** the five conda environments are baked at `/opt/wf-conda`
+- **Pre-built envs:** the conda environments are baked at `/opt/wf-conda`
   (read-only in the SIF) and reused via `--conda-prefix`. If Apptainer reports a
   read-only error writing there, add `--writable-tmpfs` to the `apptainer exec` command.
-- `apptainer run atacseq-spikein.sif -s workflow/Snakefile --cores 16` also works — it
-  invokes the same entrypoint.
 
 ## Deploying with snakedeploy
 
