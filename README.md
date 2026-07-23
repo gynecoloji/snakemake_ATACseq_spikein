@@ -1,4 +1,8 @@
 [![CI](https://github.com/gynecoloji/snakemake_ATACseq_spikein/actions/workflows/ci.yml/badge.svg)](https://github.com/gynecoloji/snakemake_ATACseq_spikein/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/gynecoloji/snakemake_ATACseq_spikein)](https://github.com/gynecoloji/snakemake_ATACseq_spikein/releases/latest)
+[![Snakemake](https://img.shields.io/badge/snakemake-%E2%89%A58.0-brightgreen.svg)](https://snakemake.github.io)
+[![Docker Pulls](https://img.shields.io/docker/pulls/gynecoloji/atacseq-spikein)](https://hub.docker.com/r/gynecoloji/atacseq-spikein)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/1299925986.svg)](https://doi.org/10.5281/zenodo.21350287)
 
 ## Citation
