@@ -72,10 +72,12 @@ Runs DESeq2 (R) over the consensus count matrix, differing only in how the
 per-sample size factors are established:
 
 - **`diffopen` (wildcard `mode`)** — `none` (median-of-ratios over all peaks),
-  `spikein` (size factors from Drosophila spike-in depth), or `ctcf`
+  `spikein` (size factors from Drosophila spike-in depth), `ctcf`
   (median-of-ratios restricted to constitutive CTCF anchors from `ctcf_bed`;
-  spike-in free). Paired design `~pair + condition` is used when each pair
-  appears exactly once per condition, else `~condition`.
+  spike-in free), or `rnastable` (median-of-ratios on promoter peaks of
+  RNA-seq-stable genes from `diffopen_rna_table`; spike-in free, opt-in). Paired
+  design `~pair + condition` is used when each pair appears exactly once per
+  condition, else `~condition`.
 - **`diffopen_anchor_shape`** — hybrid Method 6: the *level* comes from the
   spike-in, an intensity-dependent *shape* is fit by loess on CTCF anchors
   (iteratively trimming anchors that move between conditions), and the combined
@@ -86,8 +88,8 @@ Outputs per mode under `results/diffopen/<mode>/`: `differential_openness.tsv`,
 `size_factors.tsv`, `run_summary.txt`, and diagnostic plots. Both rules use
 `workflow/envs/r-diffopen.yaml` (DESeq2, apeglm, GenomicRanges).
 
-Only `spikein` and `anchor_shape` can detect a genuine genome-wide shift; `none`
-and `ctcf` define the global level as invariant by construction. Compare the
+Only `spikein` and `anchor_shape` can detect a genuine genome-wide shift; `none`,
+`ctcf`, and `rnastable` define the global level as invariant by construction. Compare the
 `run_summary.txt` files — a size-factor spread that tracks condition indicates a
 confounded normalization.
 
