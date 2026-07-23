@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.4.1...v1.4.2) (2026-07-23)
+
+
+### Documentation
+
+* make the HPC/Apptainer SIF download path prominent ([ccb73b5](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/ccb73b5a2edcdf53d2aea083154341499962f3f2))
+* make the HPC/Apptainer SIF download path prominent ([b9fe799](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/b9fe799868a11f74495950ff4cc1857652eeba97))
+
 ## [1.4.1](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.4.0...v1.4.1) (2026-07-23)
 
 
