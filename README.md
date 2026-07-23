@@ -527,6 +527,40 @@ snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_all \
            diffopen_rna_table=path/to/rnaseq_deseq2_results.tsv
 ```
 
+**`diffopen_rna_table` format.** A standard DESeq2/edgeR results table, TSV by
+default (CSV auto-detected by a `.csv` extension). Only four columns are read —
+extra columns (e.g. a full DESeq2 export's `lfcSE`, `stat`, `pvalue`) are ignored:
+
+| Column (default) | Rename with | Used for |
+|---|---|---|
+| `gene` | `diffopen_rna_gene_col` | gene symbol, matched to GTF `gene_name` |
+| `baseMean` | `diffopen_rna_basemean_col` | must be ≥ `diffopen_rna_basemean_min` (10) |
+| `log2FoldChange` | `diffopen_rna_lfc_col` | \|value\| ≤ `diffopen_rna_lfc_max` (0.5) |
+| `padj` | `diffopen_rna_padj_col` | ≥ `diffopen_rna_padj_min` (0.5), or `NA` |
+
+A gene is a **stable anchor** only when all three thresholds hold. `padj = NA`
+counts as non-significant (eligible); `NA` in `baseMean` or `log2FoldChange`
+disqualifies it. Example (tab-separated):
+
+```
+gene	baseMean	log2FoldChange	padj
+GAPDH	500	0.05	0.95
+ACTB	800	-0.1	0.7
+MYC	1200	2.3	0.001
+```
+
+Here `GAPDH` and `ACTB` are anchors; `MYC` is rejected (|log2FC| 2.3 > 0.5, padj ≪ 0.5).
+
+> ⚠️ DESeq2's `results()` keeps the gene id in **row names, not a column** — promote
+> it before writing, and use symbols that match the GTF `gene_name` (`GAPDH`, not
+> `ENSG00000111640`; the run reports the match rate):
+>
+> ```r
+> df <- as.data.frame(results(dds)); df$gene <- rownames(df)
+> write.table(df[, c("gene","baseMean","log2FoldChange","padj")],
+>             "rnaseq_deseq2_results.tsv", sep = "\t", quote = FALSE, row.names = FALSE)
+> ```
+
 ### Cluster Execution
 
 For execution on a SLURM cluster: (Not tested)
