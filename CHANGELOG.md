@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.3.0...v1.4.0) (2026-07-23)
+
+
+### Added
+
+* **diffopen:** add rnastable normalization mode ([359874a](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/359874a44d0f4f343b9bffd37d10a3fc96160b1a))
+* **diffopen:** add rnastable wildcard + params wiring to diffopen.smk ([bcc8982](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/bcc8982685053b428f30556909847dae8d5c0dc1))
+* **diffopen:** add size_factors_rnastable orchestrator + anchor floor ([c33ace2](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/c33ace21df7b7f560906271432f058baa329ddf3))
+* **diffopen:** add stable_genes_from_de for rnastable mode ([ed7a4ad](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/ed7a4ad729c6462b4e38a13316ae41da92aaa89b))
+* **diffopen:** add TSS-window + anchor selection for rnastable ([03680e5](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/03680e5aa41995fa7fe4173159851ec795e61250))
+* **diffopen:** config schema + fast-fail guard for rnastable mode ([808ba76](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/808ba76f1d3b25f307614e05e8ad4c8ff0a0a2fe))
+* **diffopen:** include rnastable in the normalization comparison report ([a424939](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/a4249391f3324371991a3235e6988400a2af562f))
+* **diffopen:** wire rnastable mode into diffopen.R main() ([febf1b8](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/febf1b8ee71eac1750f0e163808e29a0004275f3))
+
+
+### Changed
+
+* **diffopen:** final-review cleanups (test path, stale comments, friendly rna_table error) ([a437ca5](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/a437ca5f4aa4cd9c6f5628407b7d21e529a0f267))
+
+
+### Documentation
+
+* document the rnastable diffopen normalization mode ([86d015d](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/86d015d4e136ecef515c6bf418c4a58d6a51a5e7))
+
 ## [1.3.0](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.2.0...v1.3.0) (2026-07-21)
 
 
