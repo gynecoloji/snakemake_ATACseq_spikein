@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.4.0...v1.4.1) (2026-07-23)
+
+
+### Documentation
+
+* **diffopen:** add diffopen_rna_table format + example table ([9bca79d](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/9bca79d2386e43ae31a9793f2e7ff81389b28efa))
+* **diffopen:** add diffopen_rna_table format + example table ([bda5df1](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/bda5df1e8a116dda099b4a17f78023e25ddd620b))
+
 ## [1.4.0](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.3.0...v1.4.0) (2026-07-23)
 
 
