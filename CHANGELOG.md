@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.4.2...v1.4.3) (2026-07-23)
+
+
+### Documentation
+
+* add release, snakemake, docker pulls and license badge ([81f9830](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/81f9830cab1e9b443623cde02a0b20afe4cc9ee5))
+* add release, snakemake, docker pulls and license badge ([60db5eb](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/60db5eb88325e3b4695f2c672976afe9df633150))
+
 ## [1.4.2](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.4.1...v1.4.2) (2026-07-23)
 
 
