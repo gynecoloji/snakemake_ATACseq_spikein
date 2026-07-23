@@ -6,17 +6,20 @@
 #   snakemake --use-conda --cores N diffopen_all          # none + spikein + ctcf
 #   snakemake --use-conda --cores N diffopen_anchor_shape # hybrid (Method 6)
 #
+# rnastable (opt-in; needs an RNA-seq DE table): add "rnastable" to
+# diffopen_modes and set diffopen_rna_table in config, then run diffopen_all.
+#
 # All modes consume the primary stage's consensus count matrix, so the primary
 # pipeline runs first automatically.
 #
 # Shared config, directory constants and _diffopen_extra_input() are in common.smk.
 
 
-# Three selectable normalizations, one output directory each. See
+# Four selectable normalizations, one output directory each. See
 # workflow/scripts/diffopen.R for what each mode does and its trade-off.
 rule diffopen:
     wildcard_constraints:
-        mode="none|spikein|ctcf",
+        mode="none|spikein|ctcf|rnastable",
     input:
         unpack(_diffopen_extra_input),  # positional: must precede keywords
         # declared so edits to the script invalidate its outputs
@@ -43,13 +46,42 @@ rule diffopen:
     params:
         outdir=lambda w: f"{DIFFOPEN_DIR}/{w.mode}",
         ref_label=config.get("diffopen_ref_label", "Control"),
-        trim_k=config.get("ctcf_trim_k", 2.5),
-        trim_iter=config.get("ctcf_trim_iter", 2),
-        # mode-specific flag, built from whichever extra input was supplied
+        trim_k=lambda w: (
+            config.get("rnastable_trim_k", 2.5)
+            if w.mode == "rnastable"
+            else config.get("ctcf_trim_k", 2.5)
+        ),
+        trim_iter=lambda w: (
+            config.get("rnastable_trim_iter", 2)
+            if w.mode == "rnastable"
+            else config.get("ctcf_trim_iter", 2)
+        ),
+        # mode-specific flags, built from whichever extra input was supplied
         extra=lambda w, input: (
             f"--spikein {input.spikein}"
             if w.mode == "spikein"
-            else f"--ctcf {input.ctcf}" if w.mode == "ctcf" else ""
+            else (
+                f"--ctcf {input.ctcf}"
+                if w.mode == "ctcf"
+                else (
+                    (
+                        f"--rna-table {input.rna_table} --models {input.models} "
+                        f"--tss-window {config.get('diffopen_rna_tss_window', 2000)} "
+                        f"--rna-gene-col {config.get('diffopen_rna_gene_col', 'gene')} "
+                        f"--rna-lfc-col {config.get('diffopen_rna_lfc_col', 'log2FoldChange')} "
+                        f"--rna-padj-col {config.get('diffopen_rna_padj_col', 'padj')} "
+                        f"--rna-basemean-col {config.get('diffopen_rna_basemean_col', 'baseMean')} "
+                        f"--rna-basemean-min {config.get('diffopen_rna_basemean_min', 10)} "
+                        f"--rna-padj-min {config.get('diffopen_rna_padj_min', 0.5)} "
+                        f"--rna-lfc-max {config.get('diffopen_rna_lfc_max', 0.5)} "
+                        f"--min-anchors {config.get('diffopen_rna_min_anchors', 100)} "
+                        f"--promoter-class-required "
+                        f"{str(config.get('diffopen_rna_promoter_class_required', True)).lower()}"
+                    )
+                    if w.mode == "rnastable"
+                    else ""
+                )
+            )
         ),
     conda:
         "../envs/r-diffopen.yaml"
@@ -224,7 +256,7 @@ rule diffopen_enrich:
 # no single --scaleFactor can express it; its tracks stay on the shared RPGC set.
 rule diffopen_bigwig:
     wildcard_constraints:
-        mode="none|spikein|ctcf",
+        mode="none|spikein|ctcf|rnastable",
     input:
         bam=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam",
         bai=f"{BLACKLIST_FILTERED_DIR}/{{sample}}.nobl.bam.bai",
@@ -339,7 +371,7 @@ rule diffopen_all:
         rules.diffopen_report.output.html,
         # Downstream runs for the hybrid too: it now emits the same
         # diffopen_{promoter,enhancer}.tsv layout, so the wildcard rules apply
-        # unchanged (rule `diffopen` is constrained to none|spikein|ctcf, so
+        # unchanged (rule `diffopen` is constrained to none|spikein|ctcf|rnastable, so
         # there is no ambiguity over who produces the anchor_shape tables).
         expand(
             f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",

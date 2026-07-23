@@ -53,7 +53,7 @@ This pipeline integrates three complementary components for complete ATAC-seq an
 2. **ATAC-seq QC stage** (`qc_all` target) - deepTools QC, FRiP, IDR, library complexity, spike-in QC, TSS enrichment score, a self-contained **interactive HTML QC report** (all QC except FastQC), plus a FastQC-only MultiQC
 
 Both stages live in a single standard-layout `workflow/Snakefile`: one `snakemake --use-conda` run builds the primary stage **and** the QC report in dependency order (unified DAG). Run a subset with the `atacseq_all` or `qc_all` targets. The layout follows the [Snakemake Workflow Catalog](https://snakemake.github.io/snakemake-workflow-catalog/) conventions, so the workflow can be deployed into another project with `snakedeploy deploy-workflow` (see [Deploying with snakedeploy](#deploying-with-snakedeploy)).
-3. **Differential openness stage** (`diffopen_all` target, R / DESeq2) - differential accessibility over the consensus count matrix under **four selectable normalizations** (none / spike-in / constitutive-CTCF / anchor+shape hybrid), so you can see how much the answer depends on the normalization choice
+3. **Differential openness stage** (`diffopen_all` target, R / DESeq2) - differential accessibility over the consensus count matrix under **selectable normalizations** (none / spike-in / constitutive-CTCF / RNA-stable / anchor+shape hybrid), so you can see how much the answer depends on the normalization choice
 
 ## Workflow Diagram
 
@@ -138,7 +138,7 @@ DESeq2 differential accessibility over the consensus matrix, with the normalizat
 as an explicit, swappable choice, split by promoter/enhancer and carried through to
 gene assignment, GO enrichment, Gviz browser tracks and a self-contained HTML
 report. See [Differential Openness](#differential-openness-opt-in-r--deseq2) for the
-four modes and how to compare them.
+available modes and how to compare them.
 
 ## Requirements
 
@@ -203,7 +203,7 @@ ref/
 ├── build_constitutive_ctcf.py           # regenerates the constitutive-CTCF anchor BED
 ├── build_qc_report.py  tss_score.py  consensus_peaks.py  process_sam.py
 ├── compute_spikein_factors.py  blacklist-stats-script.py  downsample_tss_matrix.py
-└── diffopen.R  spikein_anchor_shape.R   # differential openness (4 normalizations)
+└── diffopen.R  spikein_anchor_shape.R   # differential openness (5 normalizations)
 ```
 
 ### Reference files: download & generate
@@ -401,7 +401,7 @@ It is **not** part of the default target (it needs ≥2 conditions in
 `config/samples.csv`); request it explicitly:
 
 ```bash
-# all four normalizations, one directory each under results/diffopen/
+# every configured normalization, one directory each under results/diffopen/
 snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_all
 
 # or just the hybrid on its own
@@ -413,6 +413,7 @@ snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_anchor_shape
 | `none` | DESeq2 median-of-ratios over **all** peaks (baseline) | No — global change defined as zero |
 | `spikein` | **Drosophila spike-in** read depth | **Yes** — but only if the spike-in is trustworthy |
 | `ctcf` | median-of-ratios restricted to **constitutive CTCF anchors** (`ctcf_bed`), spike-in free | No — CTCF level assumed invariant |
+| `rnastable` | median-of-ratios restricted to **promoter peaks of RNA-seq-stable genes** (`diffopen_rna_table`), spike-in free — *opt-in* | No — stable-gene level assumed invariant |
 | `anchor_shape` | hybrid: **level** from the spike-in, intensity-dependent **shape** from CTCF anchors (anchors that move are trimmed) | Yes, with a shape correction |
 
 **Compare the `run_summary.txt` files before trusting any single mode** — a large
@@ -446,7 +447,7 @@ column and which values indicate a scaling artifact rather than biology.
 | Gene assignment | `diffopen_annotate` | `<mode>/genes/` — nearest **transcript** TSS (not gene-level 5′ ends, which misassign long genes), reported for any biotype and separately for protein-coding; per class × tier annotation tables, up/down gene lists, and the enrichment universe |
 | GO enrichment | `diffopen_enrich` | `<mode>/enrichment/` — clusterProfiler + `org.Hs.eg.db`, offline (no network call at runtime); `GO_<class>_<tier>_<up\|down>.tsv/.png` plus `enrichment_summary.tsv` |
 | Browser tracks | `diffopen_tracks` | `<mode>/tracks/gviz_<class>_<up\|down>_<GENE>.png/.pdf` — per-sample coverage, GENCODE models, and the differential region highlighted |
-| HTML summary | `diffopen_report` | `results/diffopen/diffopen_report.html` — self-contained (inline SVG, no external assets), comparing all four normalizations side by side with a verdict panel |
+| HTML summary | `diffopen_report` | `results/diffopen/diffopen_report.html` — self-contained (inline SVG, no external assets), comparing every normalization that ran side by side with a verdict panel |
 
 > ⚠️ **Track heights are not the effect size.** The Gviz panels read
 > `results/bigwig/` — deepTools `--normalizeUsing RPGC` (1× depth), the **same
@@ -475,12 +476,17 @@ Relevant config keys:
 
 | key | default | meaning |
 |---|---|---|
-| `diffopen_modes` | `[none, spikein, ctcf]` | which size-factor modes to run (the hybrid always runs) |
+| `diffopen_modes` | `[none, spikein, ctcf]` | which size-factor modes to run (add `rnastable` to enable it; the hybrid always runs) |
 | `diffopen_ref_label` | `Control` | reference level of the `type` column |
 | `diffopen_min_genes` | `10` | gate: skip enrichment/tracks for sets at or below this |
 | `diffopen_go_ont` | `BP` | GO ontology (`BP`/`MF`/`CC`) |
 | `diffopen_track_tier` | `p01` | which tier to draw Gviz tracks for |
 | `diffopen_track_top` | `5` | top N up and N down regions per class |
+| `diffopen_rna_table` | *(unset)* | RNA-seq DESeq2/edgeR table; **required** to run the `rnastable` mode |
+| `diffopen_rna_basemean_min` / `_padj_min` / `_lfc_max` | `10` / `0.5` / `0.5` | `rnastable`: a gene is *stable* if baseMean ≥, padj ≥ (or NA), and \|log2FC\| ≤ these |
+| `diffopen_rna_tss_window` | `2000` | `rnastable`: TSS ± window (bp) linking a stable gene to its promoter peaks |
+| `diffopen_rna_min_anchors` | `100` | `rnastable`: refuse to normalize on fewer anchor peaks |
+| `diffopen_rna_promoter_class_required` | `true` | `rnastable`: require anchors to be promoter-class (`false` = TSS-window overlap only) |
 
 **Anchor set.** `ctcf_bed` defaults to `ref/constitutive_ctcf_hg38.bed` — 18,108
 CTCF regions that are genuinely constitutive, built by
@@ -501,6 +507,25 @@ python workflow/scripts/build_constitutive_ctcf.py --min-frac 0.95   # cached EN
 > one, and 82% of those cCREs show no CTCF binding across 60 cell types. It is
 > retained only for reference. As independent validation, the constitutive set
 > recovers **97.2%** of the anchors from an unrelated occupancy-grading analysis.
+
+**RNA-stable anchor set** (`rnastable` mode, opt-in). Instead of CTCF, this mode
+anchors on the promoters of genes your **RNA-seq** shows are transcriptionally
+unchanged: a consensus peak is an anchor when it is promoter-class **and** overlaps
+the TSS ± `diffopen_rna_tss_window` of a *stable* gene — baseMean ≥
+`diffopen_rna_basemean_min`, padj ≥ `diffopen_rna_padj_min` (or NA), and
+|log2FC| ≤ `diffopen_rna_lfc_max` — read from `diffopen_rna_table` and matched by
+gene **symbol → GTF `gene_name`** (the run reports the match rate). Size factors
+then use the same median-of-ratios + invariance trim as `ctcf`. Like `none`/`ctcf`
+it assumes that anchor set is invariant, so it **cannot** detect a uniform
+genome-wide shift. Enable it by adding `rnastable` to `diffopen_modes` and setting
+`diffopen_rna_table`:
+
+```bash
+# target BEFORE --config (snakemake's --config greedily swallows a trailing target)
+snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_all \
+  --config diffopen_modes='[none,spikein,ctcf,rnastable]' \
+           diffopen_rna_table=path/to/rnaseq_deseq2_results.tsv
+```
 
 ### Cluster Execution
 
@@ -697,7 +722,7 @@ data (see [Configuration](#configuration)) and run with `snakemake --use-conda`.
 
 ### 7. Differential Openness (`diffopen_all` target)
 
-DESeq2 over the consensus matrix under four selectable normalizations — see
+DESeq2 over the consensus matrix under selectable normalizations — see
 [Differential Openness](#differential-openness-opt-in-r--deseq2). Outputs per mode →
 `results/diffopen/<mode>/`.
 
@@ -739,7 +764,7 @@ results/
 │   ├── tss_enrichment_scores.tsv, peak_summary.tsv
 │   └── blacklist_filtering_stats.txt
 # ── Differential openness (opt-in: `snakemake diffopen_all`) ──
-└── diffopen/               # one dir per normalization: none, spikein, ctcf, anchor_shape
+└── diffopen/               # one dir per normalization: none, spikein, ctcf, anchor_shape (+ rnastable if enabled)
     └── <mode>/             # differential_openness.tsv, size_factors.tsv, run_summary.txt, MA_plot.png
 ```
 

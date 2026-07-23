@@ -32,8 +32,24 @@ jobs:
           PY
           touch ref/hg38.fa ref/dm6.fa ref/hg38.2bit \
                 ref/gencode.v36.annotation.gtf ref/picard.jar
+          # diffopen rnastable dry-run needs the annotation BEDs + a DE table
+          mkdir -p ref tests/fixtures
+          printf 'chr1\t0\t1000\n' > ref/promoter_chr1-22X.bed
+          printf 'chr1\t2000\t3000\n' > ref/enhancer_chr1-22X.bed
       - name: Dry run (DAG builds + config validates)
         run: snakemake -s workflow/Snakefile -n --cores 1
+      - name: Dry run rnastable wiring
+        run: |
+          snakemake -s workflow/Snakefile -n --cores 1 \
+            results/diffopen/rnastable/differential_openness.tsv \
+            --config diffopen_rna_table=tests/fixtures/rna_de.tsv
+      - name: Dry run rnastable guard fires without a table
+        run: |
+          if snakemake -s workflow/Snakefile -n --cores 1 \
+               --config 'diffopen_modes=[rnastable]' >err.log 2>&1; then
+            echo "guard did not fire" >&2; cat err.log; exit 1
+          fi
+          grep -qi "diffopen_rna_table" err.log && echo "guard fired as expected"
       - name: Lint (informational)
         continue-on-error: true
         run: snakemake -s workflow/Snakefile --lint

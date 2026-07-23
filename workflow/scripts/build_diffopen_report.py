@@ -16,7 +16,7 @@ import pandas as pd
 
 CLASSES = [("all", "differential_openness"), ("promoter", "diffopen_promoter"),
            ("enhancer", "diffopen_enhancer")]
-MODES = ("none", "spikein", "ctcf", "anchor_shape")
+MODES = ("none", "spikein", "ctcf", "rnastable", "anchor_shape")
 
 CSS = """:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#e3e3e3;--accent:#0b6e7c;
 --warn:#b26a1b;--bad:#a12d2d;--good:#2d7a3e;--card:#fafafa}
