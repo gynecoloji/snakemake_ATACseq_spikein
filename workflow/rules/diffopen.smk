@@ -23,7 +23,7 @@ rule diffopen:
     input:
         unpack(_diffopen_extra_input),  # positional: must precede keywords
         # declared so edits to the script invalidate its outputs
-        script="workflow/scripts/diffopen.R",
+        script=f"{SCRIPTS}/diffopen.R",
         counts=f"{CONSENSUS_DIR}/consensus_counts.txt",
         samples=config["samples_table"],
         promoter=config["promoter_bed"],
@@ -90,7 +90,7 @@ rule diffopen:
     shell:
         """
         mkdir -p {params.outdir} logs/diffopen
-        Rscript workflow/scripts/diffopen.R \
+        Rscript {SCRIPTS}/diffopen.R \
             --mode {wildcards.mode} \
             --counts {input.counts} \
             --samples {input.samples} \
@@ -108,7 +108,7 @@ rule diffopen:
 rule diffopen_anchor_shape:
     input:
         # declared so edits to the script invalidate its outputs
-        script="workflow/scripts/spikein_anchor_shape.R",
+        script=f"{SCRIPTS}/spikein_anchor_shape.R",
         counts=f"{CONSENSUS_DIR}/consensus_counts.txt",
         spikein=f"{SPIKEIN_DIR}/normalization_factors.tsv",
         samples=config["samples_table"],
@@ -146,7 +146,7 @@ rule diffopen_anchor_shape:
     shell:
         """
         mkdir -p {params.outdir} logs/diffopen
-        Rscript workflow/scripts/spikein_anchor_shape.R \
+        Rscript {SCRIPTS}/spikein_anchor_shape.R \
             --counts {input.counts} \
             --spikein {input.spikein} \
             --samples {input.samples} \
@@ -171,7 +171,7 @@ rule diffopen_anchor_shape:
 rule diffopen_gene_models:
     input:
         # declared so edits to the script invalidate its outputs
-        script="workflow/scripts/diffopen_annotate.R",
+        script=f"{SCRIPTS}/diffopen_annotate.R",
         gtf=config["gtf"],
     output:
         models=f"{DIFFOPEN_DIR}/gene_models.rds",
@@ -182,7 +182,7 @@ rule diffopen_gene_models:
     shell:
         """
         mkdir -p logs/diffopen
-        Rscript workflow/scripts/diffopen_annotate.R --models-only \
+        Rscript {SCRIPTS}/diffopen_annotate.R --models-only \
             --gtf {input.gtf} --models {output.models} > {log} 2>&1
         """
 
@@ -190,7 +190,7 @@ rule diffopen_gene_models:
 rule diffopen_annotate:
     input:
         # declared so edits to the script invalidate its outputs
-        script="workflow/scripts/diffopen_annotate.R",
+        script=f"{SCRIPTS}/diffopen_annotate.R",
         promoter=f"{DIFFOPEN_DIR}/{{mode}}/diffopen_promoter.tsv",
         enhancer=f"{DIFFOPEN_DIR}/{{mode}}/diffopen_enhancer.tsv",
         gtf=config["gtf"],
@@ -208,7 +208,7 @@ rule diffopen_annotate:
     shell:
         """
         mkdir -p logs/diffopen
-        Rscript workflow/scripts/diffopen_annotate.R \
+        Rscript {SCRIPTS}/diffopen_annotate.R \
             --indir {params.indir} --gtf {input.gtf} \
             --outdir {params.outdir} --models {input.models} > {log} 2>&1
         """
@@ -221,7 +221,7 @@ rule diffopen_annotate:
 rule diffopen_enrich:
     input:
         # declared so edits to the script invalidate its outputs
-        script="workflow/scripts/diffopen_enrich.R",
+        script=f"{SCRIPTS}/diffopen_enrich.R",
         universe=f"{DIFFOPEN_DIR}/{{mode}}/genes/universe_genes.txt",
     output:
         summary=f"{DIFFOPEN_DIR}/{{mode}}/enrichment/enrichment_summary.tsv",
@@ -237,7 +237,7 @@ rule diffopen_enrich:
     shell:
         """
         mkdir -p logs/diffopen
-        Rscript workflow/scripts/diffopen_enrich.R \
+        Rscript {SCRIPTS}/diffopen_enrich.R \
             --genedir {params.genedir} --outdir {params.outdir} \
             --min-genes {params.min_genes} --ont {params.ont} > {log} 2>&1
         """
@@ -298,7 +298,7 @@ rule diffopen_bigwig:
 rule diffopen_tracks:
     input:
         # declared so edits to the script invalidate its outputs
-        script="workflow/scripts/diffopen_tracks.R",
+        script=f"{SCRIPTS}/diffopen_tracks.R",
         summary=f"{DIFFOPEN_DIR}/{{mode}}/genes/annotation_summary.tsv",
         models=f"{DIFFOPEN_DIR}/gene_models.rds",
         # mode's own size-factor-scaled tracks; RPGC fallback for anchor_shape
@@ -319,7 +319,7 @@ rule diffopen_tracks:
     shell:
         """
         mkdir -p logs/diffopen {params.outdir}
-        Rscript workflow/scripts/diffopen_tracks.R \
+        Rscript {SCRIPTS}/diffopen_tracks.R \
             --genedir {params.genedir} --bigwigdir {params.bwdir} \
             --models {input.models} --outdir {params.outdir} \
             --tier {params.tier} --top {params.top} \
@@ -333,7 +333,7 @@ rule diffopen_tracks:
 rule diffopen_report:
     input:
         # declared so edits to the script invalidate its outputs
-        script="workflow/scripts/build_diffopen_report.py",
+        script=f"{SCRIPTS}/build_diffopen_report.py",
         summaries=expand(
             f"{DIFFOPEN_DIR}/{{mode}}/run_summary.txt", mode=DIFFOPEN_MODES
         ),
@@ -350,7 +350,7 @@ rule diffopen_report:
     shell:
         """
         mkdir -p logs/diffopen
-        python workflow/scripts/build_diffopen_report.py \
+        python {SCRIPTS}/build_diffopen_report.py \
             --diffopen-dir {params.indir} \
             --out {output.html} > {log} 2>&1
         """

@@ -98,6 +98,12 @@ rule fastp:
 # Align reads with Bowtie2 to the COMBINED (human + spike-in) index; reads are
 # split by chrom prefix downstream. The human FASTA must be chr-prefixed (UCSC)
 # since Bowtie2 has no --add-chrname: blacklist/promoter/MACS2 expect chr1..chrX.
+#
+# --rg-id/--rg are required, not cosmetic: Bowtie2 emits no @RG unless asked, and
+# Picard MarkDuplicates dereferences the read group to resolve the library it
+# deduplicates within. Without one it dies with a NullPointerException
+# ("SAMRecord.getReadGroup() is null"). This went unnoticed while Picard came from
+# an unpinned manually-downloaded jar; pinning picard=3.4.0 exposed it.
 rule bowtie2_align:
     input:
         r1=f"{FASTP_DIR}/{{sample}}_R1.trimmed.fastq.gz",
@@ -119,6 +125,10 @@ rule bowtie2_align:
         # all tags) as a coordinate-sorted, indexed BAM — nothing filtered here.
         bowtie2 -x {params.index} -1 {input.r1} -2 {input.r2} \
                -p {threads} \
+               --rg-id {wildcards.sample} \
+               --rg SM:{wildcards.sample} \
+               --rg LB:{wildcards.sample} \
+               --rg PL:ILLUMINA \
                -q --phred33 -X 3000 -I 0 --no-discordant --no-mixed \
                2> {output.summary} \
             | samtools sort -@ 4 -m 2G -T {TMP_DIR}/{wildcards.sample}.rawsort -o {output.bam} -
@@ -134,7 +144,7 @@ rule samtools_sort_filter_index:
         # named because `script` below makes a bare {input} expand to both paths
         bam=f"{ALIGN_DIR}/{{sample}}.bam",
         # declared so edits to the script invalidate its outputs
-        script="workflow/scripts/process_sam.py",
+        script=f"{SCRIPTS}/process_sam.py",
     output:
         bam=f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam",
         bai=f"{FILTERED_DIR}/{{sample}}.sorted.filtered.bam.bai",
@@ -164,7 +174,7 @@ rule samtools_sort_filter_index:
         # Name-sort, then drop reads orphaned by filtering (keep complete pairs only)
         samtools sort -n -O sam -o {TMP_DIR}/temp_{wildcards.sample}.sorted.sam \
             {TMP_DIR}/temp_{wildcards.sample}.unsorted.sam 2>> {log}
-        python workflow/scripts/process_sam.py {TMP_DIR}/temp_{wildcards.sample}.sorted.sam \
+        python {SCRIPTS}/process_sam.py {TMP_DIR}/temp_{wildcards.sample}.sorted.sam \
             {TMP_DIR}/temp_{wildcards.sample}.uc.unsorted.sam 2>> {log}
 
         # Coordinate-sort human reads (incl chrM) to a BAM and index it
@@ -196,6 +206,8 @@ rule remove_duplicates:
         dedup_bam=f"{DEDUP_DIR}/{{sample}}.dedup.bam",
         metrics=f"{DEDUP_DIR}/{{sample}}.dedup.metrics.txt",
     threads: 4
+    resources:
+        mem_mb=8000,
     conda:
         "../envs/snakemake.yaml"
     log:
@@ -203,7 +215,7 @@ rule remove_duplicates:
     shell:
         """
         mkdir -p {DEDUP_DIR}
-        java -jar ref/picard.jar MarkDuplicates \
+        picard -Xmx{resources.mem_mb}m MarkDuplicates \
                INPUT={input.filtered_bam} \
                OUTPUT={output.dedup_bam} \
                METRICS_FILE={output.metrics} \
@@ -302,6 +314,7 @@ rule call_peaks:
     params:
         outdir=PEAKS_DIR,
         name="{sample}",
+        genome=config["macs2_genome"],
     conda:
         "../envs/macs2.yaml"
     log:
@@ -312,7 +325,7 @@ rule call_peaks:
         macs2 callpeak \
               -t {input.treatment} \
               -f BAMPE \
-              -g hs \
+              -g {params.genome} \
               --outdir {params.outdir} \
               -n {params.name} \
               --nomodel \
@@ -368,7 +381,7 @@ rule spikein_extract_count:
     input:
         sam=f"{ALIGN_DIR}/{{sample}}.bam",
         # declared so edits to the script invalidate its outputs
-        script="workflow/scripts/process_sam.py",
+        script=f"{SCRIPTS}/process_sam.py",
     output:
         bam=f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.bam",
         bai=f"{SPIKEIN_ALIGN_DIR}/{{sample}}.spikein.bam.bai",
@@ -379,6 +392,8 @@ rule spikein_extract_count:
         prefix=config["spikein_prefix"],
         tmp_sorted=f"{TMP_DIR}/{{sample}}.spikein.sorted.bam",
     threads: 8
+    resources:
+        mem_mb=8000,
     conda:
         "../envs/snakemake.yaml"
     log:
@@ -393,13 +408,13 @@ rule spikein_extract_count:
         # Name-sort, then drop reads orphaned by filtering (keep complete pairs only)
         samtools sort -n -O sam -o {TMP_DIR}/temp_{wildcards.sample}.spikein.sorted.sam \
             {TMP_DIR}/temp_{wildcards.sample}.spikein.unsorted.sam 2>> {log}
-        python workflow/scripts/process_sam.py {TMP_DIR}/temp_{wildcards.sample}.spikein.sorted.sam \
+        python {SCRIPTS}/process_sam.py {TMP_DIR}/temp_{wildcards.sample}.spikein.sorted.sam \
             {TMP_DIR}/temp_{wildcards.sample}.spikein.uc.unsorted.sam 2>> {log}
         # Coordinate-sort the complete-pairs-only spike-in reads to BAM
         samtools view -@ {threads} -bhS {TMP_DIR}/temp_{wildcards.sample}.spikein.uc.unsorted.sam | \
             samtools sort -@ {threads} -O bam -o {params.tmp_sorted} 2>> {log}
         # Deduplicate, index, count
-        java -jar ref/picard.jar MarkDuplicates \
+        picard -Xmx{resources.mem_mb}m MarkDuplicates \
                 INPUT={params.tmp_sorted} \
                 OUTPUT={output.bam} \
                 METRICS_FILE={output.metrics} \
