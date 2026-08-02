@@ -29,7 +29,6 @@ DAG** covering two stages in dependency order:
 | Spike-in genome FASTA | `ref/dm6.fa` | any species |
 | Blacklist BED | `ref/hg38_blacklist_regions.bed` | ENCODE, chr-prefixed |
 | GTF / 2bit / promoter+enhancer BEDs | `ref/…` | QC references |
-| Picard | `ref/picard.jar` | duplicate marking |
 
 Configuration is read from `config/config.yaml` and validated against the schema
 at parse time (missing/invalid parameters fail fast).

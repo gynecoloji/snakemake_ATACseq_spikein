@@ -189,7 +189,6 @@ ref/
 ├── hg38.2bit                            # human genome 2bit (QC: GC bias)
 ├── gencode.v36.annotation.gtf           # GENCODE annotation (TSS, gene models)
 ├── FANTOM5_CAGE_peaks_hg38.bed.gz       # FANTOM5 CAGE peaks (optional; only to rebuild the CAGE set)
-├── picard.jar                           # Picard (MarkDuplicates)
 │
 │  ── shipped, or generated from the downloads ──
 ├── hg38_blacklist_regions.bed           # ENCODE hg38 blacklist v2                (shipped)
@@ -233,9 +232,6 @@ gunzip gencode.v36.annotation.gtf.gz
 # promoter set (the built Promoter_FANTOM5CAGE_*.bed already ships with the repo)
 curl -L -o FANTOM5_CAGE_peaks_hg38.bed.gz \
   "https://fantom.gsc.riken.jp/5/datafiles/reprocessed/hg38_latest/extra/CAGE_peaks/hg38_fair+new_CAGE_peaks_phase1and2.bed.gz"
-
-# Picard (MarkDuplicates)
-curl -L -o picard.jar https://github.com/broadinstitute/picard/releases/latest/download/picard.jar
 
 cd ..
 ```
