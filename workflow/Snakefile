@@ -19,6 +19,46 @@ from snakemake.utils import min_version
 min_version("8.0")
 
 
+# ── driver / environment Snakemake version check ────────────────────────
+# Rules that use `script:` run their Python INSIDE workflow/envs/snakemake.yaml,
+# through a wrapper the *driver* Snakemake generates. If the driver's minor
+# version differs from the one pinned in that env, the wrapper calls an API the
+# env's Snakemake does not have and the rule dies with a bare CalledProcessError
+# and an EMPTY log file -- 30-80 minutes into a run, at `compute_spikein_factors`
+# or `consensus_peaks`, with no traceback anywhere. Fail immediately instead.
+#
+#   ImportError: cannot import name 'snakemake' from 'snakemake.script'
+#
+# Patch drift is fine; only major.minor must agree.
+def _check_driver_version():
+    import re
+    from pathlib import Path
+
+    from snakemake import __version__ as driver_version
+
+    env_yaml = Path(workflow.basedir) / "envs" / "snakemake.yaml"
+    if not env_yaml.exists():
+        return
+    m = re.search(r"^\s*-\s*snakemake\s*=\s*([0-9][0-9.]*)", env_yaml.read_text(), re.M)
+    if not m:
+        return
+    pinned = m.group(1)
+    driver = driver_version.split("+")[0]
+    if driver.split(".")[:2] != pinned.split(".")[:2]:
+        raise WorkflowError(
+            f"Snakemake version mismatch: the driver running this workflow is "
+            f"{driver}, but workflow/envs/snakemake.yaml pins snakemake={pinned}.\n"
+            f"Rules that use `script:` will fail with an empty log file.\n\n"
+            f"Fix by installing a matching driver, e.g.\n"
+            f"    mamba create -n atacseq -c conda-forge -c bioconda "
+            f"snakemake-minimal={pinned} pandas\n"
+            f"or by driving the workflow with the environment's own Snakemake."
+        )
+
+
+_check_driver_version()
+
+
 configfile: "config/config.yaml"
 
 
