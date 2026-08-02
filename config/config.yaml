@@ -76,7 +76,12 @@ diffopen_ref_label: "Control"        # reference level of the `type` column
 # few responsive/artefactual anchors can't drag the size factors.
 ctcf_trim_k: 2.5                     # MAD multiplier; set very large to disable trimming
 ctcf_trim_iter: 2                    # trim/re-estimate iterations (0 = no trimming)
-# Hybrid anchor+shape (Method 6) parameters — rule diffopen_anchor_shape
+# Hybrid anchor+shape (Method 6) parameters — rule diffopen_anchor_shape.
+# DIAGNOSTIC ONLY: deliberately absent from diffopen_modes above. It was the worst
+# performer of the four modes on both benchmark datasets — it invented a global
+# shift on one and inverted the sign on the other. Use it to test how much a result
+# depends on the shape assumption, not to produce a result you intend to report.
+# See the README section "anchor_shape is a diagnostic, not a recommended normalization".
 anchor_shape_span: 0.6               # loess span for the intensity-dependent shape
 anchor_shape_trim_k: 2.5             # MAD multiplier for trimming CTCF anchors that move
 anchor_shape_iter: 2                 # shape/trim refinement iterations
