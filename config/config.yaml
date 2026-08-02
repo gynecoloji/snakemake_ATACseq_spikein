@@ -54,6 +54,12 @@ promoter_bed: "ref/promoter_chr1-22X.bed"       # reads-in-annotation QC
 enhancer_bed: "ref/enhancer_chr1-22X.bed"
 spikein_pct_min: 2                              # Active Motif spike-in target lower bound (%)
 spikein_pct_max: 10                             # upper bound (%)
+# HARD FLOOR on spike-in depth. compute_spikein_factors refuses to emit
+# normalization factors if any sample falls below this, because factors derived
+# from counts this low are dominated by Poisson noise and generate large numbers
+# of false differential peaks. Unlike spikein_pct_min/max (which only flag in the
+# QC report) this gates the primary and differential stages. Set 0 to disable.
+spikein_min_reads: 100000
 
 # ── Differential openness (opt-in: `snakemake diffopen_all`) ────────────
 # Constitutive-CTCF anchor set used by the `ctcf` normalization mode and by the

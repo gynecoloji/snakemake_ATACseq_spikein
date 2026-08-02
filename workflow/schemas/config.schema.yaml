@@ -146,6 +146,18 @@ properties:
     maximum: 100
     description: Upper bound (%) of the expected spike-in read fraction; drives the QC status flag.
     default: 10
+  spikein_min_reads:
+    type: integer
+    minimum: 0
+    description: >-
+      Hard floor on spike-in reads per sample. `compute_spikein_factors` raises an
+      error rather than emitting normalization factors if any sample falls below
+      this. Factors derived from counts this low are dominated by Poisson noise
+      (SD = sqrt(n), so ~22% per-sample error at 20 reads) and produce large
+      numbers of false differential peaks. Unlike `spikein_pct_min`/`spikein_pct_max`,
+      which only set a QC status flag, this gates the primary and differential
+      stages. Set 0 to disable.
+    default: 100000
 
   ctcf_bed:
     type: string
