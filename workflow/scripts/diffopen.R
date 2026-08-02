@@ -54,7 +54,8 @@ parse_args <- function(args) {
               `rna-lfc-col` = "log2FoldChange", `rna-padj-col` = "padj",
               `rna-basemean-col` = "baseMean", `rna-basemean-min` = "10",
               `rna-padj-min` = "0.5", `rna-lfc-max` = "0.5",
-              `promoter-class-required` = "true")
+              `promoter-class-required` = "true",
+              `spikein-max-within-spread` = "2")
   i <- 1
   while (i <= length(args)) {
     key <- sub("^--", "", args[i]); out[[key]] <- args[i + 1]; i <- i + 2
@@ -187,6 +188,45 @@ rnastable_anchor_idx <- function(coords, promoter_is, tss_windows,
 size_factors_spikein <- function(spike) {
   stopifnot(all(spike > 0))
   spike / exp(mean(log(spike)))
+}
+
+#' Refuse to normalize on a spike-in whose own replicates disagree.
+#'
+#' A spike-in is a *measurement* of input material. Its precision is observable
+#' directly: replicates of the same condition received the same spike-in, so any
+#' spread among them is measurement error, not biology. When that error is large
+#' the resulting size factors do not merely bias the answer -- they wreck the
+#' variance structure. Benchmarked on two public datasets:
+#'
+#'   GSE174272  spike-in absent (~20 reads)   -> modes INVENTED a 1.38-1.56x global
+#'                                               shift; 7,488 vs 115 peaks at padj<0.05
+#'   GSE148175  5.9-21.0 M reads, but 4.3x    -> modes MISSED a real genome-wide
+#'              spread WITHIN the DMSO arm       decrease and found 0 peaks where the
+#'                                               spike-in-free baseline found 1,488
+#'
+#' The second case passes any depth or fraction threshold (11.8-36.4% spike-in), so
+#' `spikein_min_reads` alone does not catch it. Within-condition spread does.
+#'
+#' Deliberately NOT a test of the between-condition contrast: at n=2 per group that
+#' interval is enormous whatever the data quality, so gating on it would block clean
+#' experiments. This gates on measurement precision only.
+#'
+#' @return list(ok, spread, worst, detail) -- caller decides to stop or warn.
+check_spikein_consistency <- function(spike, condition, max_spread = 2) {
+  cond <- as.character(condition)
+  per <- lapply(split(unname(spike), cond), function(v) {
+    if (length(v) < 2) return(NA_real_)
+    max(v) / min(v)
+  })
+  spreads <- unlist(per)
+  obs <- spreads[is.finite(spreads)]
+  if (!length(obs)) {
+    return(list(ok = TRUE, spread = NA_real_, worst = NA_character_,
+                detail = "only one replicate per condition; cannot assess"))
+  }
+  worst <- names(obs)[which.max(obs)]
+  detail <- paste(sprintf("%s=%.2fx", names(obs), obs), collapse = ", ")
+  list(ok = max(obs) <= max_spread, spread = max(obs), worst = worst, detail = detail)
 }
 
 #' Median-of-ratios restricted to a subset of rows (the CTCF anchors).
@@ -392,6 +432,25 @@ main <- function() {
   } else if (mode == "spikein") {
     spike <- read_spikein_reads(a$spikein)
     stopifnot(all(samp %in% names(spike)))
+    max_spread <- as.numeric(a$`spikein-max-within-spread`)
+    chk <- check_spikein_consistency(spike[samp], des$condition, max_spread)
+    message(sprintf("spike-in within-condition spread: %s (limit %.2fx)",
+                    chk$detail, max_spread))
+    if (!chk$ok) {
+      stop(sprintf(
+        paste0("spike-in is not self-consistent: within-condition spread %.2fx in '%s' ",
+               "(limit %.2fx).\n",
+               "Replicates of one condition received the same spike-in, so this spread is ",
+               "measurement error, not biology. Size factors this noisy do not just bias ",
+               "the global shift -- they destroy power: on a benchmark dataset with a 3.5x ",
+               "within-condition spread the spikein mode found 0 differential peaks where ",
+               "the spike-in-free baseline found 1,488.\n",
+               "Observed: %s\n",
+               "Inspect results/spikein/normalization_factors.tsv. Raise ",
+               "`spikein_max_within_spread` in config/config.yaml to override, or use a ",
+               "spike-in-free mode (none / ctcf / rnastable)."),
+        chk$spread, chk$worst, max_spread, chk$detail))
+    }
     sf <- size_factors_spikein(spike[samp])
   } else if (mode == "ctcf") {
     idx <- which(ctcf_overlap(fc$coords, a$ctcf))

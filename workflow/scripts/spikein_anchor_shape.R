@@ -48,7 +48,8 @@ suppressPackageStartupMessages({
 # ---- tiny --key value arg parser -------------------------------------------
 parse_args <- function(args) {
   out <- list(span = "0.6", `trim-k` = "2.5", iter = "2", `ref-label` = "Control",
-              `min-refs` = "200", `min-class-peaks` = "100")
+              `min-refs` = "200", `min-class-peaks` = "100",
+              `spikein-max-within-spread` = "2")
   i <- 1
   while (i <= length(args)) {
     key <- sub("^--", "", args[i]); out[[key]] <- args[i + 1]; i <- i + 2
@@ -109,6 +110,32 @@ classify_peaks <- function(coords, promoter_bed, enhancer_bed) {
   enh  <- bed_overlap(coords, enhancer_bed) & !prom
   factor(ifelse(prom, "promoter", ifelse(enh, "enhancer", "other")),
          levels = c("promoter", "enhancer", "other"))
+}
+
+#' Refuse to normalize on a spike-in whose own replicates disagree.
+#'
+#' Identical check to diffopen.R. The hybrid takes its LEVEL term straight from the
+#' spike-in, so a noisy spike-in corrupts it and the CTCF shape correction is then
+#' applied on top -- amplifying rather than damping the error. Benchmarked: on a
+#' dataset with no spike-in the hybrid reported +0.64 log2 where the plain spikein
+#' mode reported +0.23, against a ground truth of no change.
+#'
+#' @return list(ok, spread, worst, detail)
+check_spikein_consistency <- function(spike, condition, max_spread = 2) {
+  cond <- as.character(condition)
+  per <- lapply(split(unname(spike), cond), function(v) {
+    if (length(v) < 2) return(NA_real_)
+    max(v) / min(v)
+  })
+  spreads <- unlist(per)
+  obs <- spreads[is.finite(spreads)]
+  if (!length(obs)) {
+    return(list(ok = TRUE, spread = NA_real_, worst = NA_character_,
+                detail = "only one replicate per condition; cannot assess"))
+  }
+  worst <- names(obs)[which.max(obs)]
+  detail <- paste(sprintf("%s=%.2fx", names(obs), obs), collapse = ", ")
+  list(ok = max(obs) <= max_spread, spread = max(obs), worst = worst, detail = detail)
 }
 
 # ---- core: level + (trimmed) CTCF shape -> normalizationFactors -------------
@@ -294,6 +321,20 @@ main <- function() {
   counts <- fc$counts[, samp, drop = FALSE]
   spike  <- spike[samp]
   condition <- des$condition; pair <- des$pair
+
+  max_spread <- as.numeric(a$`spikein-max-within-spread`)
+  chk <- check_spikein_consistency(spike, condition, max_spread)
+  message(sprintf("spike-in within-condition spread: %s (limit %.2fx)",
+                  chk$detail, max_spread))
+  if (!chk$ok)
+    stop(sprintf(paste0(
+      "spike-in is not self-consistent: within-condition spread %.2fx in '%s' (limit %.2fx).\n",
+      "The hybrid takes its LEVEL term from the spike-in and applies the CTCF shape ",
+      "correction on top, so a noisy spike-in is amplified rather than damped.\n",
+      "Observed: %s\n",
+      "Raise `spikein_max_within_spread` in config/config.yaml to override, or use a ",
+      "spike-in-free mode (none / ctcf / rnastable)."),
+      chk$spread, chk$worst, max_spread, chk$detail))
 
   ref0 <- which(ctcf_overlap(fc$coords, a$ctcf))
   message(sprintf("CTCF-overlapping consensus peaks: %d / %d", length(ref0), nrow(counts)))

@@ -60,6 +60,13 @@ spikein_pct_max: 10                             # upper bound (%)
 # of false differential peaks. Unlike spikein_pct_min/max (which only flag in the
 # QC report) this gates the primary and differential stages. Set 0 to disable.
 spikein_min_reads: 100000
+# Maximum tolerated fold-spread of spike-in reads BETWEEN REPLICATES OF ONE
+# CONDITION. Replicates of a condition received the same spike-in, so any spread
+# among them is measurement error. The `spikein` and `anchor_shape` modes refuse to
+# run above this. Benchmarked: a 3.5x within-condition spread made the spikein mode
+# find 0 differential peaks where the spike-in-free baseline found 1,488. A depth
+# floor does not catch this case -- that dataset had 5.9-21.0 M spike-in reads.
+spikein_max_within_spread: 2
 
 # ── Differential openness (opt-in: `snakemake diffopen_all`) ────────────
 # Constitutive-CTCF anchor set used by the `ctcf` normalization mode and by the

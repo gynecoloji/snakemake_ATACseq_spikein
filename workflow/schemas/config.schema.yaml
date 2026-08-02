@@ -158,6 +158,19 @@ properties:
       which only set a QC status flag, this gates the primary and differential
       stages. Set 0 to disable.
     default: 100000
+  spikein_max_within_spread:
+    type: number
+    minimum: 1
+    description: >-
+      Maximum tolerated fold-spread of spike-in reads between replicates of one
+      condition. Replicates of a condition received the same spike-in, so spread
+      among them is measurement error rather than biology. The `spikein` and
+      `anchor_shape` modes refuse to run above this, because size factors that noisy
+      destroy statistical power: on a benchmark dataset with a 3.5x within-condition
+      spread the `spikein` mode found 0 differential peaks where the spike-in-free
+      baseline found 1,488. A read-depth floor does not catch this case -- that
+      dataset had 5.9-21.0 M spike-in reads (11.8-36.4% of the library).
+    default: 2
 
   ctcf_bed:
     type: string
