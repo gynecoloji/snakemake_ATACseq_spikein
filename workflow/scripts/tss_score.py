@@ -20,17 +20,35 @@ def enrichment(values, edge_frac=0.1):
     return center / m if m > 0 else 0.0
 
 
+# deepTools `plotProfile --outFileNameData` writes TWO header rows before the
+# per-sample data:
+#
+#     bin labels<TAB><TAB>-2.0Kb ...        <- tick labels
+#     bins<TAB><TAB>1.0<TAB>2.0<TAB>3.0 ... <- bin indices
+#     <sample><TAB>genes<TAB>0.38<TAB>...   <- one row per sample
+#
+# Skipping only the first (`lines[1:]`) left the `bins` row to be parsed as if it
+# were a sample, because its bin indices are perfectly good floats. That put a
+# phantom row named `bins` into the shipped QC table and MultiQC bargraph, with a
+# meaningless "enrichment" computed from bin numbers.
+#
+# Filtering by label rather than by position, so a future deepTools release that
+# adds or reorders a header row cannot silently reintroduce the same class of bug.
+_HEADER_LABELS = {"bin labels", "bins"}
+
+
 def parse_profile(path):
     """Parse `plotProfile --outFileNameData` into {sample: [profile floats]}.
 
-    Header row (bin positions) is skipped; each data row starts with label
-    field(s) followed by the numeric per-bin mean profile — we take the row's
-    first field as the sample and every field that parses as a float as signal.
+    Each data row is `<sample> <group> <per-bin means...>`; the row's first field
+    is the sample and every field that parses as a float is signal.
     """
     out = {}
     lines = [ln for ln in Path(path).read_text().splitlines() if ln.strip()]
-    for line in lines[1:]:
+    for line in lines:
         f = line.split("\t")
+        if f[0].strip() in _HEADER_LABELS:
+            continue
         vals = []
         for x in f[1:]:
             try:
