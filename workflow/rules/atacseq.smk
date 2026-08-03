@@ -425,6 +425,10 @@ rule compute_spikein_factors:
         ),
     output:
         table=f"{SPIKEIN_DIR}/normalization_factors.tsv",
+    params:
+        # Refuse to emit factors below this many spike-in reads per sample; below
+        # it the factors are Poisson noise rather than signal. 0 disables.
+        min_reads=config.get("spikein_min_reads", 100000),
     conda:
         "../envs/snakemake.yaml"
     log:
