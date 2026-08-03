@@ -29,7 +29,6 @@ DAG** covering two stages in dependency order:
 | Spike-in genome FASTA | `ref/dm6.fa` | any species |
 | Blacklist BED | `ref/hg38_blacklist_regions.bed` | ENCODE, chr-prefixed |
 | GTF / 2bit / promoter+enhancer BEDs | `ref/…` | QC references |
-| Picard | `ref/picard.jar` | duplicate marking |
 
 Configuration is read from `config/config.yaml` and validated against the schema
 at parse time (missing/invalid parameters fail fast).
@@ -82,16 +81,37 @@ per-sample size factors are established:
   spike-in, an intensity-dependent *shape* is fit by loess on CTCF anchors
   (iteratively trimming anchors that move between conditions), and the combined
   per-region offset is injected as DESeq2 `normalizationFactors`.
+  **Diagnostic only — see the caveat below.** Not in the default `diffopen_modes`;
+  it must be requested explicitly.
 
 Targets: `diffopen_all` (all configured modes) and `diffopen_anchor_shape`.
 Outputs per mode under `results/diffopen/<mode>/`: `differential_openness.tsv`,
 `size_factors.tsv`, `run_summary.txt`, and diagnostic plots. Both rules use
 `workflow/envs/r-diffopen.yaml` (DESeq2, apeglm, GenomicRanges).
 
-Only `spikein` and `anchor_shape` can detect a genuine genome-wide shift; `none`,
-`ctcf`, and `rnastable` define the global level as invariant by construction. Compare the
-`run_summary.txt` files — a size-factor spread that tracks condition indicates a
-confounded normalization.
+Only `spikein` and `anchor_shape` can detect a genuine genome-wide shift *in
+principle*; `none`, `ctcf`, and `rnastable` define the global level as invariant by
+construction. Compare the `run_summary.txt` files — a size-factor spread that
+tracks condition indicates a confounded normalization.
+
+**In measured practice, that in-principle advantage did not survive contact with
+real data.** Benchmarked on two public datasets, both spike-in-anchored modes failed
+both tests, in opposite directions: on a negative control with no global change they
+invented a 1.4–1.6× increase (7,488 and 7,977 peaks at padj<0.05 against `none`'s
+115), and on a dataset with a documented, strong, site-specific loss of accessibility
+they returned 0 significant peaks against `none`'s 1,488. Standard-error inflation
+swung from 0.52 to 2.68 while the spike-in-free modes stayed near 1.0 throughout —
+a measure that is independent of any ground truth.
+
+Note the limit of that evidence: neither dataset carries an independently quantified
+genome-wide shift, so **no mode has yet been validated as correctly recovering one.**
+The benchmark is a negative control plus a calibration audit, not a positive control.
+
+`anchor_shape` was the worst performer of the four — its shape correction, the only
+thing distinguishing it from plain `spikein`, amplified the fabrication on one
+dataset and inverted the sign on the other. It is therefore **retained as a
+diagnostic, not recommended as a normalization**: comparing it against `spikein`
+isolates how much of a result rests on the intensity-dependent shape assumption.
 
 ## Outputs
 

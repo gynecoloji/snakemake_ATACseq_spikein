@@ -19,6 +19,14 @@ validate(config, "../schemas/config.schema.yaml")
 samples_df = pd.read_csv(config["samples_table"])
 SAMPLES = samples_df["sample_id"].tolist()
 
+# ── Helper scripts (relative to the SNAKEFILE, not the working dir) ─────
+# Rules previously referred to these as "workflow/scripts/x.py", which only
+# resolves when the working directory happens to be the repo root. That broke
+# `snakemake -d <dir>` (how the executable test case and the Snakemake Workflow
+# Catalog run the workflow) and any `module`/snakedeploy import, where
+# workflow/ is not under the working directory at all.
+SCRIPTS = os.path.join(workflow.basedir, "scripts")
+
 # ── Output directories (all relative to the working dir) ────────────────
 RESULT_DIR = "results"
 FASTQC_DIR = f"{RESULT_DIR}/fastqc"

@@ -2,8 +2,9 @@
 # and the Python `script:` rules.
 #
 # Provides: bowtie2 / bowtie2-build, fastp, fastqc, multiqc, samtools, bedtools,
-# featureCounts (subread), a JRE for ref/picard.jar, and python + pandas/numpy for
-# the script: rules (compute_spikein_factors, blacklist_stats, consensus_peaks,
+# featureCounts (subread), Picard (MarkDuplicates) + a JRE (FastQC needs Java), and
+# python + pandas/numpy for the script: rules (compute_spikein_factors,
+# blacklist_stats, consensus_peaks,
 # tss_enrichment_score, downsample_tss_matrix, qc_report, diffopen_report).
 #
 # Curated direct dependencies, pinned by VERSION not build string. Previously a
@@ -34,3 +35,4 @@ dependencies:
   - multiqc=1.28
   - subread=2.0.8
   - openjdk=23.0.2
+  - picard=3.4.0

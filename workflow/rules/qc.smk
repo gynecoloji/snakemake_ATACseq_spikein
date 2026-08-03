@@ -311,7 +311,7 @@ rule deeptools_tss_heatmap_downsample:
     input:
         matrix=os.path.join(DEEPTOOLS_DIR, "matrix.mat.gz"),
         # declared so edits to the script invalidate its outputs
-        script="workflow/scripts/downsample_tss_matrix.py",
+        script=f"{SCRIPTS}/downsample_tss_matrix.py",
     output:
         json=os.path.join(DEEPTOOLS_DIR, "tss_heatmap_downsampled.json"),
     conda:
@@ -320,7 +320,7 @@ rule deeptools_tss_heatmap_downsample:
         "logs/deeptools_tss/downsample.log",
     shell:
         """
-        python workflow/scripts/downsample_tss_matrix.py {input.matrix} \
+        python {SCRIPTS}/downsample_tss_matrix.py {input.matrix} \
             -o {output.json} --nrows 180 --ncols 80 > {log} 2>&1
         """
 
@@ -677,7 +677,7 @@ rule qc_report:
         os.path.join(DEEPTOOLS_DIR, "tss_heatmap_downsampled.json"),
         # declared so edits to the script invalidate its outputs
         # (keyword must follow the positional inputs above)
-        script="workflow/scripts/build_qc_report.py",
+        script=f"{SCRIPTS}/build_qc_report.py",
     output:
         html=os.path.join(QC_DIR, "atacseq_qc_report.html"),
     params:
@@ -690,7 +690,7 @@ rule qc_report:
     shell:
         """
         mkdir -p {QC_DIR} logs/qc_report
-        python workflow/scripts/build_qc_report.py \
+        python {SCRIPTS}/build_qc_report.py \
             --results-dir {params.results} \
             --out {output.html} \
             --samples {params.samples} \

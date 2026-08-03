@@ -6,8 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  # ── Fast checks: formatting, unit tests, DAG/config validation ────────────
+  static:
+    name: Static checks + dry runs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,16 +21,29 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        # Snakemake must match the pin in workflow/envs/snakemake.yaml: the
-        # Snakefile fails fast when the driver's Snakemake differs from that pin
-        # (script: rules break with an empty log otherwise). Keep this in step
-        # with that pin.
-        run: pip install "snakemake==9.3.2" pytest numpy pandas
+        # snakemake pinned to match workflow/envs/snakemake.yaml: the Snakefile
+        # aborts on a driver/env version mismatch (the driver-version check),
+        # which would fail the dry-run steps below otherwise.
+        # snakefmt + black pinned so the formatting check is reproducible: an
+        # unpinned install drifts with the runner's Python and reformats
+        # differently than a developer's local `snakefmt`.
+        run: pip install "snakemake==9.3.2" "snakefmt==0.10.3" "black==24.10.0" pytest numpy pandas
+
+      - name: Formatting (snakefmt)
+        # Informational, not gated: snakefmt's verdict is not reproducible across
+        # environments -- byte-identical files with identical snakefmt/black/Python
+        # versions can still differ from a runner's result -- so it must not block
+        # merges. It still runs and prints a diff of anything it would change.
+        continue-on-error: true
+        run: snakefmt --check --diff workflow/
+
       - name: Unit tests
         run: python -m pytest tests/ -q
+
       - name: Stub inputs
         # Create empty placeholder reads + reference files so the DAG resolves in
         # a dry run (no rule is executed, so 0-byte files are fine).
+        # Picard now comes from conda, so no picard.jar stub is needed.
         run: |
           mkdir -p data ref/COMBINED
           python - <<'PY'
@@ -35,18 +54,21 @@ jobs:
                   pathlib.Path(f"data/{s}{suf}").touch()
           PY
           touch ref/hg38.fa ref/dm6.fa ref/hg38.2bit \
-                ref/gencode.v36.annotation.gtf ref/picard.jar
+                ref/gencode.v36.annotation.gtf
           # diffopen rnastable dry-run needs the annotation BEDs + a DE table
           mkdir -p ref tests/fixtures
           printf 'chr1\t0\t1000\n' > ref/promoter_chr1-22X.bed
           printf 'chr1\t2000\t3000\n' > ref/enhancer_chr1-22X.bed
+
       - name: Dry run (DAG builds + config validates)
         run: snakemake -s workflow/Snakefile -n --cores 1
+
       - name: Dry run rnastable wiring
         run: |
           snakemake -s workflow/Snakefile -n --cores 1 \
             results/diffopen/rnastable/differential_openness.tsv \
             --config diffopen_rna_table=tests/fixtures/rna_de.tsv
+
       - name: Dry run rnastable guard fires without a table
         run: |
           if snakemake -s workflow/Snakefile -n --cores 1 \
@@ -54,6 +76,78 @@ jobs:
             echo "guard did not fire" >&2; cat err.log; exit 1
           fi
           grep -qi "diffopen_rna_table" err.log && echo "guard fired as expected"
+
       - name: Lint (informational)
+        # 84 findings, nearly all the "shell command uses a directory constant
+        # defined outside the rule" style note. Reported but not gated, so a real
+        # regression would not be lost in pre-existing noise.
         continue-on-error: true
         run: snakemake -s workflow/Snakefile --lint
+
+  # ── The executable test case: really runs, then asserts the numbers ───────
+  integration:
+    name: Executable test case (.test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          channels: conda-forge,bioconda
+          channel-priority: strict
+          activate-environment: driver
+
+      - name: Install the pinned driver
+        shell: bash -el {0}
+        # The driver's Snakemake must match workflow/envs/snakemake.yaml on
+        # major.minor -- the Snakefile checks this and aborts otherwise, because
+        # a mismatched driver breaks every `script:` rule with an empty log.
+        run: conda install -y "snakemake=9.3.2"
+
+      - name: Cache per-rule conda environments
+        uses: actions/cache@v4
+        with:
+          path: .snakemake-conda
+          key: sdm-conda-${{ runner.os }}-${{ hashFiles('workflow/envs/*.yaml') }}
+
+      - name: Generate the synthetic dataset
+        shell: bash -el {0}
+        run: python .test/make_testdata.py
+
+      - name: Run the workflow end to end
+        shell: bash -el {0}
+        # The TSS table is requested explicitly rather than via `qc_all`: it is
+        # what the phantom-`bins` regression check reads, and the rest of qc_all
+        # pulls in computeGCBias, which needs a .2bit the fixture does not build.
+        run: |
+          snakemake -s workflow/Snakefile \
+            atacseq_all results/qc/tss_enrichment_scores.tsv \
+            -d .test --sdm conda --conda-prefix "$PWD/.snakemake-conda" \
+            --cores 2
+
+      - name: Assert the outputs
+        shell: bash -el {0}
+        # Values, not just exit codes: spike-in fraction recovered, peaks found
+        # where they were planted, and exactly one TSS row per sample.
+        run: python .test/assert_outputs.py
+
+      - name: Build the Snakemake report
+        shell: bash -el {0}
+        # Absolute --report path: with `-d .test` the working dir is already
+        # .test, so a relative ".test/report.zip" resolves to .test/.test/report.zip
+        # and fails. $PWD is the repo root at the start of this step.
+        run: |
+          snakemake -s workflow/Snakefile \
+            atacseq_all results/qc/tss_enrichment_scores.tsv \
+            -d .test --report "$PWD/.test/report.zip"
+
+      - name: Upload report + logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: |
+            .test/report.zip
+            .test/logs/
+          retention-days: 7

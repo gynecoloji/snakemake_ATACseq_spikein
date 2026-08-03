@@ -57,7 +57,7 @@ This pipeline integrates three complementary components for complete ATAC-seq an
 2. **ATAC-seq QC stage** (`qc_all` target) - deepTools QC, FRiP, IDR, library complexity, spike-in QC, TSS enrichment score, a self-contained **interactive HTML QC report** (all QC except FastQC), plus a FastQC-only MultiQC
 
 Both stages live in a single standard-layout `workflow/Snakefile`: one `snakemake --use-conda` run builds the primary stage **and** the QC report in dependency order (unified DAG). Run a subset with the `atacseq_all` or `qc_all` targets. The layout follows the [Snakemake Workflow Catalog](https://snakemake.github.io/snakemake-workflow-catalog/) conventions, so the workflow can be deployed into another project with `snakedeploy deploy-workflow` (see [Deploying with snakedeploy](#deploying-with-snakedeploy)).
-3. **Differential openness stage** (`diffopen_all` target, R / DESeq2) - differential accessibility over the consensus count matrix under **selectable normalizations** (none / spike-in / constitutive-CTCF / RNA-stable / anchor+shape hybrid), so you can see how much the answer depends on the normalization choice
+3. **Differential openness stage** (`diffopen_all` target, R / DESeq2) - differential accessibility over the consensus count matrix under **selectable normalizations** (none / spike-in / constitutive-CTCF, plus opt-in RNA-stable), so you can see how much the answer depends on the normalization choice. A fifth mode, the anchor+shape hybrid, is retained as a **diagnostic only** — it was the worst performer on both benchmark datasets ([why](#anchor_shape-is-a-diagnostic-not-a-recommended-normalization))
 
 ## Workflow Diagram
 
@@ -189,7 +189,6 @@ ref/
 ├── hg38.2bit                            # human genome 2bit (QC: GC bias)
 ├── gencode.v36.annotation.gtf           # GENCODE annotation (TSS, gene models)
 ├── FANTOM5_CAGE_peaks_hg38.bed.gz       # FANTOM5 CAGE peaks (optional; only to rebuild the CAGE set)
-├── picard.jar                           # Picard (MarkDuplicates)
 │
 │  ── shipped, or generated from the downloads ──
 ├── hg38_blacklist_regions.bed           # ENCODE hg38 blacklist v2                (shipped)
@@ -233,9 +232,6 @@ gunzip gencode.v36.annotation.gtf.gz
 # promoter set (the built Promoter_FANTOM5CAGE_*.bed already ships with the repo)
 curl -L -o FANTOM5_CAGE_peaks_hg38.bed.gz \
   "https://fantom.gsc.riken.jp/5/datafiles/reprocessed/hg38_latest/extra/CAGE_peaks/hg38_fair+new_CAGE_peaks_phase1and2.bed.gz"
-
-# Picard (MarkDuplicates)
-curl -L -o picard.jar https://github.com/broadinstitute/picard/releases/latest/download/picard.jar
 
 cd ..
 ```
@@ -418,7 +414,7 @@ It is **not** part of the default target (it needs ≥2 conditions in
 # every configured normalization, one directory each under results/diffopen/
 snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_all
 
-# or just the hybrid on its own
+# the anchor+shape hybrid — DIAGNOSTIC ONLY, opt-in, see the note below
 snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_anchor_shape
 ```
 
@@ -428,12 +424,43 @@ snakemake -s workflow/Snakefile --use-conda --cores 8 diffopen_anchor_shape
 | `spikein` | **Drosophila spike-in** read depth | **Yes** — but only if the spike-in is trustworthy |
 | `ctcf` | median-of-ratios restricted to **constitutive CTCF anchors** (`ctcf_bed`), spike-in free | No — CTCF level assumed invariant |
 | `rnastable` | median-of-ratios restricted to **promoter peaks of RNA-seq-stable genes** (`diffopen_rna_table`), spike-in free — *opt-in* | No — stable-gene level assumed invariant |
-| `anchor_shape` | hybrid: **level** from the spike-in, intensity-dependent **shape** from CTCF anchors (anchors that move are trimmed) | Yes, with a shape correction |
+| `anchor_shape` | hybrid: **level** from the spike-in, intensity-dependent **shape** from CTCF anchors (anchors that move are trimmed) — **diagnostic only, see below** | In principle yes; **not in measured practice** |
 
 **Compare the `run_summary.txt` files before trusting any single mode** — a large
 size-factor spread that tracks condition means that normalization is confounded.
 (In our GSF4007 data the spike-in factors spanned 5× and separated by condition,
 which is why the spike-in-free `ctcf` mode exists.)
+
+> #### `anchor_shape` is a diagnostic, not a recommended normalization
+>
+> It is **not** in the default `diffopen_modes` and has to be requested explicitly
+> (`diffopen_anchor_shape`). Do not use it to produce a result you intend to report.
+>
+> We benchmarked all four modes on two public datasets. `anchor_shape` was the
+> **worst performer on both**:
+>
+> | dataset | what it tests | `anchor_shape` result |
+> |---|---|---|
+> | GSE174272 | negative control — no global change | invented a **+0.645 (1.56×)** shift; **7,977** peaks at padj<0.05 against `none`'s 115 |
+> | GSE148175 | recovery of a documented site-specific loss | **0** significant peaks, against `none`'s 1,488 and `ctcf`'s 1,762 |
+>
+> Its standard-error inflation swung from **0.52** (anti-conservative — fabricating
+> discoveries) to **2.68** (over-conservative — destroying them), while the
+> spike-in-free modes stayed near 1.0 on both. That measure is **independent of any
+> ground truth** — it is a property of the test's own variance structure. The shape
+> correction, its only advantage over plain `spikein`, hurt in both directions.
+>
+> Note what is *not* claimed: neither dataset carries an independently quantified
+> genome-wide shift, so no mode is scored on whether it recovered one. The case
+> against `anchor_shape` rests on inventing signal that is not there and losing
+> signal that is.
+>
+> It is retained because comparing it against `spikein` isolates how much of a
+> result depends on the intensity-dependent shape assumption, which is genuinely
+> informative when diagnosing a suspect normalization. That is its job now.
+>
+> Full analysis: [`benchmark/FINDINGS.md`](https://github.com/gynecoloji/snakemake_ATACseq_spikein)
+> in the companion JOSS working directory.
 
 #### Promoter / enhancer split
 
