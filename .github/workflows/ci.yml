@@ -24,7 +24,10 @@ jobs:
         # snakemake pinned to match workflow/envs/snakemake.yaml: the Snakefile
         # aborts on a driver/env version mismatch (the driver-version check),
         # which would fail the dry-run steps below otherwise.
-        run: pip install "snakemake==9.3.2" snakefmt pytest numpy pandas
+        # snakefmt + black pinned so the formatting check is reproducible: an
+        # unpinned install drifts with the runner's Python and reformats
+        # differently than a developer's local `snakefmt`.
+        run: pip install "snakemake==9.3.2" "snakefmt==0.10.3" "black==24.10.0" pytest numpy pandas
 
       - name: Formatting (snakefmt)
         run: snakefmt --check workflow/

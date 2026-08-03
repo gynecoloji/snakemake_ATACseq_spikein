@@ -34,6 +34,10 @@ peak_types: ["narrowPeak"]
 # concatenated with the human genome to build `combined_index`.
 spikein_fasta: "ref/dm6.fa"
 spikein_prefix: "spikein_"           # prepended to spike-in chrom names (avoid collisions + enable splitting)
+# The synthetic spike-in is deliberately tiny (~13k reads/sample); lower the
+# adequacy floor (default 100000) so compute_spikein_factors normalizes on the
+# test data instead of refusing it as too shallow.
+spikein_min_reads: 1000
 
 # deepTools bigWig settings
 effective_genome_size: 400000        # length of the synthetic chr21
