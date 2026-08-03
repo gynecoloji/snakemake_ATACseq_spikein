@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.6](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.4.5...v1.4.6) (2026-08-03)
+
+
+### Fixed
+
+* rule correctness fixes + an executable test case (.test) ([#18](https://github.com/gynecoloji/snakemake_ATACseq_spikein/issues/18)) ([9b49324](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/9b493245a0693ce4159cc5068e13bd5af5f5fc91))
+
 ## [1.4.5](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.4.4...v1.4.5) (2026-08-03)
 
 
