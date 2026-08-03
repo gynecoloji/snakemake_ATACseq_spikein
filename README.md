@@ -302,9 +302,19 @@ cd snakemake_ATACseq_spikein
 # You need Snakemake + conda/mamba as the driver. The per-rule tool environments
 # (workflow/envs/*.yaml) are created automatically on the first `--use-conda` run —
 # you do not build them by hand.
-mamba create -n atacseq -c conda-forge -c bioconda snakemake-minimal pandas
+#
+# PIN THE DRIVER to the same version workflow/envs/snakemake.yaml pins. Rules that
+# use `script:` run inside that environment through a wrapper the driver generates;
+# a mismatched driver makes every one of them fail with an empty log file. The
+# workflow checks this at startup and refuses to run on a mismatch.
+mamba create -n atacseq -c conda-forge -c bioconda snakemake-minimal=9.3.2 pandas
 conda activate atacseq
 ```
+
+> **Running from a batch script?** Invoke Snakemake by its **absolute path** rather than
+> putting the driver environment on `PATH`. Several Bioconda tools (macs2 among them) ship a
+> `#!/usr/bin/env python` shebang, so a foreign Python ahead of the per-rule environment's
+> `bin` wins and the tool fails with `ModuleNotFoundError`.
 
 > **No local install?** Skip all of the above and use the container image instead —
 > see [Container Execution (Docker / Apptainer)](#container-execution-docker--apptainer).

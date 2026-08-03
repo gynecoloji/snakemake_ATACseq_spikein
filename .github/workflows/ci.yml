@@ -21,7 +21,10 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install snakemake snakefmt pytest numpy pandas
+        # snakemake pinned to match workflow/envs/snakemake.yaml: the Snakefile
+        # aborts on a driver/env version mismatch (the driver-version check),
+        # which would fail the dry-run steps below otherwise.
+        run: pip install "snakemake==9.3.2" snakefmt pytest numpy pandas
 
       - name: Formatting (snakefmt)
         run: snakefmt --check workflow/

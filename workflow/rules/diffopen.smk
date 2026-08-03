@@ -56,6 +56,10 @@ rule diffopen:
             if w.mode == "rnastable"
             else config.get("ctcf_trim_iter", 2)
         ),
+        # Refuse to normalize on a spike-in whose own replicates disagree by more
+        # than this fold-spread within a condition -- that spread is measurement
+        # error, and size factors that noisy destroy power (see diffopen.R).
+        spikein_max_within_spread=config.get("spikein_max_within_spread", 2),
         # mode-specific flags, built from whichever extra input was supplied
         extra=lambda w, input: (
             f"--spikein {input.spikein}"
@@ -97,6 +101,7 @@ rule diffopen:
             --outdir {params.outdir} \
             --ref-label '{params.ref_label}' \
             --trim-k {params.trim_k} --trim-iter {params.trim_iter} \
+            --spikein-max-within-spread {params.spikein_max_within_spread} \
             --promoter-bed {input.promoter} --enhancer-bed {input.enhancer} \
             {params.extra} > {log} 2>&1
         """
@@ -134,6 +139,7 @@ rule diffopen_anchor_shape:
         ecdf=f"{DIFFOPEN_DIR}/anchor_shape/absolute_ecdf.png",
         shape=f"{DIFFOPEN_DIR}/anchor_shape/shape_curves.png",
     params:
+        spikein_max_within_spread=config.get("spikein_max_within_spread", 2),
         outdir=f"{DIFFOPEN_DIR}/anchor_shape",
         ref_label=config.get("diffopen_ref_label", "Control"),
         span=config.get("anchor_shape_span", 0.6),
@@ -156,6 +162,7 @@ rule diffopen_anchor_shape:
             --enhancer-bed {input.enhancer_bed} \
             --span {params.span} \
             --trim-k {params.trim_k} \
+            --spikein-max-within-spread {params.spikein_max_within_spread} \
             --iter {params.iter} \
             --ref-label '{params.ref_label}' > {log} 2>&1
         """
