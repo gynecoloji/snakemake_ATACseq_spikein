@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.4.3...v1.4.4) (2026-08-03)
+
+
+### Fixed
+
+* make conda environments installable under strict channel priority ([#12](https://github.com/gynecoloji/snakemake_ATACseq_spikein/issues/12)) ([5206971](https://github.com/gynecoloji/snakemake_ATACseq_spikein/commit/52069719f111cbdd29c2a6364c1075a1a6f8cfec))
+
 ## [1.4.3](https://github.com/gynecoloji/snakemake_ATACseq_spikein/compare/v1.4.2...v1.4.3) (2026-07-23)
 
 
