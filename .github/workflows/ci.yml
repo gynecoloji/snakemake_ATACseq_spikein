@@ -15,7 +15,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install snakemake pytest numpy pandas
+        # Snakemake must match the pin in workflow/envs/snakemake.yaml: the
+        # Snakefile fails fast when the driver's Snakemake differs from that pin
+        # (script: rules break with an empty log otherwise). Keep this in step
+        # with that pin.
+        run: pip install "snakemake==9.3.2" pytest numpy pandas
       - name: Unit tests
         run: python -m pytest tests/ -q
       - name: Stub inputs
