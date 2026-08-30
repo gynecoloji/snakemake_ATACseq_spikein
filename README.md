@@ -949,3 +949,4 @@ For questions or issues with this pipeline, please refer to the individual tool 
 ---
 
 **Note**: This pipeline is optimized for human genome analysis (hg38) but can be adapted for other organisms by updating reference files and parameters.
+**New Update**: Nextflow version of this workflow is stored in  https://github.com/gynecoloji/nf_atacseq_spikein.git and check it if you want to deploy workflow through nextflow.
